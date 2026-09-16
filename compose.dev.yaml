@@ -1,0 +1,53 @@
+# Local development only: hardcoded credentials, no TLS, Postgres reachable
+# from your machine. Do not deploy this file -- see TODO.md.
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      # ${VAR:-default} uses the environment variable if set, otherwise the default.
+      # Credentials must match the postgres service below.
+      ConnectionStrings__Db: ${DB_CONNECTION:-Host=postgres;Database=hakutaku;Username=hakutaku;Password=hakutaku;GSS Encryption Mode=Disable}
+    depends_on:
+      postgres:
+        # Wait until Postgres accepts connections, not just until the container
+        # starts. The app runs migrations on boot and crashes if the database
+        # isn't up yet -- on a first run, initdb takes a few seconds.
+        condition: service_healthy
+
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hakutaku
+      POSTGRES_PASSWORD: hakutaku
+      POSTGRES_DB: hakutaku
+    healthcheck:
+      # -h 127.0.0.1 forces a TCP check. During initdb Postgres listens on a
+      # unix socket only, so this correctly reports unhealthy until it's really
+      # ready for the app to connect.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U hakutaku -d hakutaku"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    ports:
+      # Bound to localhost so the database is not reachable from the network.
+      # Lets you connect with pgAdmin/DBeaver at localhost:5432.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
