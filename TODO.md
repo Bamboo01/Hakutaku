@@ -52,6 +52,22 @@ scope for the MVP or deferred past it.
 
 ## 4. Production deploy: a real `compose.yaml` + TLS
 
+**Done.** `compose.yaml` + the updated `Caddyfile` are deployed and verified on
+the team43 VM (`51.79.242.169`), using `51.79.242.169.nip.io` as
+`HAKUTAKU_DOMAIN` (a free wildcard-DNS service that resolves straight to the
+IP, so no domain registration was needed). Caddy obtained a real Let's Encrypt
+certificate on the first attempt and `/Health` and `/api/players` both respond
+correctly over HTTPS through the full path (browser → Caddy → app → postgres).
+
+**Watch out for next time:** the cert was requested from Let's Encrypt's
+*production* CA directly (no staging test first). That's fine as a one-off,
+but Let's Encrypt allows only 5 duplicate certificates per week for the same
+domain — so avoid repeated `docker compose down -v` (which wipes the
+`caddy_data` volume, forcing a fresh certificate request) in quick succession
+against this same domain while testing.
+
+Original notes below, kept for reference.
+
 Today there is exactly one compose file, `compose.dev.yaml`, and it is
 local-only: hardcoded credentials, no TLS, Postgres bound to your machine. A
 production deploy needs a second file. **Do not deploy `compose.dev.yaml`.**
@@ -169,14 +185,14 @@ Watch it happen with `docker compose logs -f caddy`.
 
 ### Deploy checklist, once the above exists
 
-- [ ] Host with a public IP, ports 22/80/443 open, nothing else
-- [ ] DNS A record pointing at it — confirm with `ping backend.example.com`
-      *before* starting Caddy
-- [ ] Docker installed (`curl -fsSL https://get.docker.com | sh`)
-- [ ] 2 GB swap if the box has ≤2 GB RAM
-- [ ] `.env` created with a real `POSTGRES_PASSWORD` and `HAKUTAKU_DOMAIN`
-      (`openssl rand -base64 32` for secrets)
-- [ ] Postgres **not** port-mapped in `compose.yaml` — internal network only
+- [x] Host with a public IP, ports 22/80/443 open, nothing else
+- [x] DNS pointing at it — used `51.79.242.169.nip.io` instead of a registered
+      domain, no A record to manage
+- [x] Docker installed (`curl -fsSL https://get.docker.com | sh`)
+- [x] 2 GB swap (pre-set on the team43 VM)
+- [x] `.env` created with a real `POSTGRES_PASSWORD` and `HAKUTAKU_DOMAIN`
+      (`openssl rand -base64 32` for secrets) — local-only, not committed
+- [x] Postgres **not** port-mapped in `compose.yaml` — internal network only
 
 ---
 
