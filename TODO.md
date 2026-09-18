@@ -1,11 +1,56 @@
 # TODO
 
-Things the readme used to describe as if they existed. None of this is built
-yet. Roughly in dependency order.
+Roughly in dependency order, across three workstreams: the backend build
+(1-3), production/CI-CD (4-6), and the C++ ingestion plane (7). See
+[CLAUDE.md](CLAUDE.md) for the overall project context.
 
 ---
 
-## 1. Production deploy: a real `compose.yaml` + TLS
+## 1. Expand the domain model
+
+Today the only entity is `Player` (`server/Models/data.cs`), with `/api/players`
+as the only real endpoint. To actually mimic PlayFab, this needs to grow into:
+
+- [ ] `User` / title-account entity — an account distinct from a `Player`
+- [ ] `Character` entity, owned by a `Player`
+- [ ] A telemetry event entity + ingestion endpoint (e.g. `POST /api/events`) —
+      this is also the contract the C++ ingestion plane (item 7) will eventually
+      call into
+- [ ] EF Core migrations for each (`dotnet ef migrations add <Name>` from `server/`)
+- [ ] CRUD/query endpoints for each, following the pattern already in
+      `server/Program.cs`
+
+---
+
+## 2. Auth / first-run admin
+
+`.env.example` used to document `HAKUTAKU_ADMIN_USER` and
+`HAKUTAKU_ADMIN_PASSWORD`. Nothing reads them, because none of it exists yet:
+
+- [ ] No user entity — the only table is `Players` (see item 1 — the `User`
+      entity work and auth work overlap, decide together whether login lives on
+      that entity or a separate one)
+- [ ] No password hashing, no login endpoint, no sessions or tokens
+- [ ] No `[Authorize]` anywhere; `/api/players` is fully open to the internet
+
+This blocks deploying, not just cosmetically — right now anyone who finds the
+URL can read and write the player table. Decide explicitly whether auth is in
+scope for the MVP or deferred past it.
+
+---
+
+## 3. MVP verification pass
+
+- [ ] Postman collection hitting every endpoint from item 1 — confirm rows land
+      in Postgres (`docker compose -f compose.dev.yaml exec postgres psql -U
+      hakutaku hakutaku`)
+- [ ] Confirm `docker compose -f compose.dev.yaml up --build` still builds and
+      serves the full stack with the new entities (this already works for
+      `Player` per the readme — don't break it as the model grows)
+
+---
+
+## 4. Production deploy: a real `compose.yaml` + TLS
 
 Today there is exactly one compose file, `compose.dev.yaml`, and it is
 local-only: hardcoded credentials, no TLS, Postgres bound to your machine. A
@@ -28,7 +73,7 @@ HTTPS certificates for you so the app doesn't have to know TLS exists.
 ### Why there's no HTTPS yet
 
 `Caddyfile` currently reads (Caddy accepts the brace on its own line, though it
-warns — see item 5):
+warns — see item 6):
 
 ```
 :80
@@ -135,47 +180,57 @@ Watch it happen with `docker compose logs -f caddy`.
 
 ---
 
-## 2. Auth / first-run admin
-
-`.env.example` used to document `HAKUTAKU_ADMIN_USER` and
-`HAKUTAKU_ADMIN_PASSWORD`. Nothing reads them, because none of it exists yet:
-
-- No user entity — the only table is `Players`
-- No password hashing, no login endpoint, no sessions or tokens
-- No `[Authorize]` anywhere; `/api/players` is fully open to the internet
-
-This blocks deploying, not just cosmetically — right now anyone who finds the
-URL can read and write the player table.
-
----
-
-## 3. Publish an image
+## 5. Publish an image
 
 The readme's old update instructions were `docker compose pull && docker compose
 up -d`, but no image is published anywhere — the only compose file builds from
 source. Either publish to GHCR from CI and use `image:` in `compose.yaml`, or
 change the update flow to `git pull && docker compose up -d --build` and accept
-building on the server (needs RAM — see the swap item above).
+building on the server (needs RAM — see the swap item above). This decision
+feeds directly into item 6's deploy stage.
 
 ---
 
-## 4. `sdk/` and `simulator/`
+## 6. CI/CD with Jenkins
+
+Not started. Separate from the backend work above — this automates building and
+deploying whatever item 1-5 produce, it doesn't change the API itself.
+
+- [ ] Stand up Jenkins on the VM
+- [ ] Define the pipeline stages by hand first, before automating: build → test
+      → build Docker image → push → deploy to the VM
+- [ ] Decide the deploy mechanism (same fork as item 5): `git pull && docker
+      compose up -d --build` on the VM vs. publishing images to a registry
+- [ ] Once the manual steps are proven, encode them in a `Jenkinsfile`
+
+---
+
+## 7. C++ telemetry ingestion plane (stretch)
+
+Personal addition, not part of the core backend scope. Depends on item 1's
+telemetry event endpoint existing and its contract being stable first.
+
+- [ ] Decide the contract: does it POST into the ASP.NET ingestion endpoint
+      (keeps one source of truth for schema/validation), or write straight to
+      Postgres (faster, duplicates validation logic)?
+- [ ] Scope it as a separate service/binary — it should not block items 1-6
+
+---
+
+## 8. `sdk/` and `simulator/`
 
 Both exist as empty directories. Git doesn't track empty directories, so they
-will silently vanish on the first commit. Add a `.gitkeep` to each if they're
+will silently vanish if never populated. Add a `.gitkeep` to each if they're
 placeholders, or delete them.
 
 ---
 
-## 5. Smaller items
+## 9. Smaller items
 
-- [ ] **Nothing is committed yet** — `master` has zero commits, and a staged
-      deletion of the old `Hakutaku.Server/` directory is still pending. The
-      ignore rules are in good shape (`web/dist`, `bin`, `obj`, `node_modules`
-      and the `.idea` dirs are all excluded), so the first commit is safe.
 - [ ] `server/appsettings.Development.json` has the dev password in source
       control. Fine for local-only credentials; move to user-secrets if it ever
       becomes a real one.
-- [ ] `server/Models/data.cs` still says "This is just sample code."
+- [ ] `server/Models/data.cs` still says "This is just sample code" — expected
+      to be replaced by item 1's domain-model work.
 - [ ] Run `caddy fmt --overwrite` on the Caddyfile — it currently warns about
       formatting on every start.
