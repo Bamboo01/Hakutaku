@@ -35,6 +35,23 @@ app.MapPost("/api/players", async (server.Models.Db db, server.Models.Player p) 
     return Results.Ok(p);
 });
 
+app.MapGet("/api/characters", async (server.Models.Db db) => await db.Characters.ToListAsync());
+app.MapPost("/api/characters", async (server.Models.Db db, server.Models.Character c) =>
+{
+    db.Characters.Add(c);
+    await db.SaveChangesAsync();
+    return Results.Ok(c);
+});
+
+app.MapGet("/api/events", async (server.Models.Db db) => await db.TelemetryEvents.ToListAsync());
+app.MapPost("/api/events", async (server.Models.Db db, server.Models.TelemetryEvent e) =>
+{
+    e.Timestamp = DateTime.UtcNow;
+    db.TelemetryEvents.Add(e);
+    await db.SaveChangesAsync();
+    return Results.Ok(e);
+});
+
 // UseDefaultFiles rewrites a request for / to /index.html
 app.UseDefaultFiles();
 
