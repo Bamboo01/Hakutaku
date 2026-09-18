@@ -1,0 +1,52 @@
+# Production deploy: real domain + automatic HTTPS via Caddy. Requires a
+# `.env` next to this file with real POSTGRES_PASSWORD and HAKUTAKU_DOMAIN
+# values -- see .env.example. Do not confuse this with compose.dev.yaml,
+# which is local-only and must never be deployed.
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__Db: Host=postgres;Database=hakutaku;Username=hakutaku;Password=${POSTGRES_PASSWORD};SSL Mode=Disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hakutaku
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: hakutaku
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U hakutaku -d hakutaku"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - pgdata:/var/lib/postgresql
+    # No `ports:` here on purpose -- only reachable from other containers on
+    # this compose network, never from the internet.
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"   # required for the ACME challenge + http->https redirect
+      - "443:443"
+    environment:
+      HAKUTAKU_DOMAIN: ${HAKUTAKU_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data       # issued certificates + ACME account key
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
