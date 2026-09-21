@@ -8,16 +8,17 @@ Roughly in dependency order, across three workstreams: the backend build
 
 ## 1. Expand the domain model
 
-Today the only entity is `Player` (`server/Models/data.cs`), with `/api/players`
-as the only real endpoint. To actually mimic PlayFab, this needs to grow into:
+**Done.** `Player`, `Character` and `TelemetryEvent` exist in
+`server/Models/data.cs` with a migration and `GET`/`POST` endpoints for each.
 
-- [ ] `User` / title-account entity — an account distinct from a `Player`
-- [ ] `Character` entity, owned by a `Player`
-- [ ] A telemetry event entity + ingestion endpoint (e.g. `POST /api/events`) —
-      this is also the contract the C++ ingestion plane (item 7) will eventually
-      call into
-- [ ] EF Core migrations for each (`dotnet ef migrations add <Name>` from `server/`)
-- [ ] CRUD/query endpoints for each, following the pattern already in
+- [x] `User` / title-account entity — decided not needed: this backend serves a
+      single game, so User and Player are 1:1 and `Player` is the account
+- [x] `Character` entity, owned by a `Player`
+- [x] A telemetry event entity + ingestion endpoint (`POST /api/events`) — this
+      is also the contract the C++ ingestion plane (item 7) will eventually
+      call into. Telemetry is player-scoped, not character-scoped.
+- [x] EF Core migrations for each
+- [x] CRUD/query endpoints for each, following the pattern already in
       `server/Program.cs`
 
 ---
@@ -41,12 +42,12 @@ scope for the MVP or deferred past it.
 
 ## 3. MVP verification pass
 
-- [ ] Postman collection hitting every endpoint from item 1 — confirm rows land
-      in Postgres (`docker compose -f compose.dev.yaml exec postgres psql -U
-      hakutaku hakutaku`)
+- [x] Every endpoint from item 1 hit end to end with curl: player → character →
+      event, read back, foreign keys and the server-side timestamp confirmed
+- [ ] A saved Postman collection for the same flow, so it can be re-run
 - [ ] Confirm `docker compose -f compose.dev.yaml up --build` still builds and
-      serves the full stack with the new entities (this already works for
-      `Player` per the readme — don't break it as the model grows)
+      serves the full stack. `compose.dev.yaml` now sets `HAKUTAKU_DOMAIN: ":80"`
+      for Caddy because the Caddyfile is shared with `compose.yaml` — untested.
 
 ---
 
@@ -198,26 +199,38 @@ Watch it happen with `docker compose logs -f caddy`.
 
 ## 5. Publish an image
 
-The readme's old update instructions were `docker compose pull && docker compose
-up -d`, but no image is published anywhere — the only compose file builds from
-source. Either publish to GHCR from CI and use `image:` in `compose.yaml`, or
-change the update flow to `git pull && docker compose up -d --build` and accept
-building on the server (needs RAM — see the swap item above). This decision
-feeds directly into item 6's deploy stage.
+**Decided: build on the server, no registry.** Jenkins checks the repo out on the
+VM and runs `docker compose up -d --build` from its workspace (see item 6). The
+build takes about a minute on the VM. Publishing to GHCR only becomes worth it if
+the VM's 4 GB of RAM turns out to be too tight for building alongside Jenkins.
+
+The readme's old `docker compose pull && docker compose up -d` update
+instructions are still wrong, because no image is published anywhere.
 
 ---
 
 ## 6. CI/CD with Jenkins
 
-Not started. Separate from the backend work above — this automates building and
-deploying whatever item 1-5 produce, it doesn't change the API itself.
+**Mostly done.** Jenkins runs on the team43 VM, installed from the official apt
+repo. Its web UI is not public: reach it with an SSH tunnel
+(`ssh -L 8081:localhost:8080 team43@51.79.242.169`, then `http://localhost:8081`).
+The `Jenkinsfile` in the repo root deploys `compose.yaml` and then smoke-tests
+`/Health` over HTTPS. The job polls GitHub every ~2 minutes and watches `master`.
 
-- [ ] Stand up Jenkins on the VM
-- [ ] Define the pipeline stages by hand first, before automating: build → test
-      → build Docker image → push → deploy to the VM
-- [ ] Decide the deploy mechanism (same fork as item 5): `git pull && docker
-      compose up -d --build` on the VM vs. publishing images to a registry
-- [ ] Once the manual steps are proven, encode them in a `Jenkinsfile`
+- [x] Stand up Jenkins on the VM
+- [x] Pipeline stages: deploy → smoke test. There is no separate test stage
+      because there is no test suite yet.
+- [x] Deploy mechanism decided (item 5): build on the server
+- [x] Encode it in a `Jenkinsfile`
+- [ ] Confirm a merge to `master` triggers a build by itself. Build #2 (on master)
+      passed, but it was started by hand with Build Now.
+
+Things that would trip up a rebuild of this setup: the `jenkins` user must be in
+the `docker` group; the pipeline reads secrets from
+`/var/lib/jenkins/hakutaku.env` (a copy of the VM's `.env`, owned by `jenkins`,
+mode 600) because it can't read `/home/team43`; and `-p hakutaku` in the
+`Jenkinsfile` must stay, or a second stack with a fresh empty database gets
+created.
 
 ---
 
@@ -246,7 +259,7 @@ placeholders, or delete them.
 - [ ] `server/appsettings.Development.json` has the dev password in source
       control. Fine for local-only credentials; move to user-secrets if it ever
       becomes a real one.
-- [ ] `server/Models/data.cs` still says "This is just sample code" — expected
-      to be replaced by item 1's domain-model work.
-- [ ] Run `caddy fmt --overwrite` on the Caddyfile — it currently warns about
-      formatting on every start.
+- [ ] `server/Models/data.cs` still says "This is just sample code" — the
+      domain model is real now, so the comment can go.
+- [x] Caddyfile formatting warning — fixed when the Caddyfile was rewritten for
+      `{$HAKUTAKU_DOMAIN}`; the VM's Caddy logs no longer show it.
