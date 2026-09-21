@@ -44,6 +44,9 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+    environment:
+      # Caddyfile is shared with compose.yaml; locally, plain HTTP on :80.
+      HAKUTAKU_DOMAIN: ":80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
