@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Hakutaku is the backend for the "Fabled" plugin: a service that mimics **PlayFab** (Microsoft's game-oriented backend) — storing telemetry plus user, player, and character data. The stack is ASP.NET Core (C#) talking to PostgreSQL via EF Core/Npgsql, with a Vue admin UI, all containerized.
 
-**Current state:** `Player`, `Character` (owned by a `Player`) and `TelemetryEvent` (player-scoped, not character-scoped) exist in `server/Models/data.cs`, each with `GET`/`POST` endpoints under `/api/`. There is no separate `User` entity (User and Player are 1:1 for a single-game backend, so `Player` is the account) and **no auth** — every endpoint is open. A production stack is live on the DigiPen team43 VM at `https://51.79.242.169.nip.io`. See [TODO.md](TODO.md) for what's done and what's left.
+**Current state:** `Player`, `Character` (owned by a `Player`) and `TelemetryEvent` (player-scoped, not character-scoped) exist in `server/Models/data.cs`, each with `GET`/`POST` endpoints under `/api/`. There is no separate `User` entity (User and Player are 1:1 for a single-game backend, so `Player` is the account). Admin login/logout exists (`server/AdminAuth.cs`, backed by the `admin_users`/`admin_sessions` tables), but **nothing is protected by it yet** — every other endpoint is open. A production stack is live on the DigiPen team43 VM at `https://51.79.242.169.nip.io`, and Jenkins redeploys it on every merge to `master` (see `Jenkinsfile`). See [TODO.md](TODO.md) for what's done and what's left.
 
-Two additional workstreams have not started: a Jenkins CI/CD pipeline (build → deploy to the VM), and a planned C++ telemetry ingestion service that will call the `/api/events` endpoint (or write directly to Postgres — undecided).
+One workstream has not started: a planned C++ telemetry ingestion service that will call the `/api/events` endpoint (or write directly to Postgres — undecided).
 
 ## Commands
 
@@ -58,7 +58,8 @@ Avoid repeated `docker compose down -v` against the real domain: it wipes the `c
 
 ## Architecture
 
-- **`server/Program.cs`** is a single minimal-API file — all endpoints are mapped here directly (no controllers yet). Read it top to bottom to see the whole request pipeline.
+- **`server/Program.cs`** is a minimal-API file — the player, character and event endpoints are mapped here directly (no controllers yet), and it wires up the middleware. The admin endpoints live in `server/AdminAuth.cs` and are mapped with `app.MapAdminEndpoints()`. Read `Program.cs` top to bottom to see the whole request pipeline.
+- **Admin auth**: passwords are Argon2id (encoded string in `pw_hash`), session tokens are random and only their SHA-256 is stored. The owner account (email `admin`) is created at startup when no admins exist, with its password from `HAKUTAKU_ADMIN_PASSWORD` (or generated and logged once). The app trusts `X-Forwarded-For` because only Caddy can reach it in production; the per-IP login rate limit and the session IP depend on that.
 - **EF Core wiring**: `server.Models.Db` (in `server/Models/data.cs`) is the single `DbContext`, registered in `Program.cs` via `AddDbContext` reading `ConnectionStrings:Db`. Entities are added as `DbSet<T>` properties on `Db`.
 - **Static file / SPA fallback ordering matters**: `UseDefaultFiles()` / `UseStaticFiles()` / `MapFallbackToFile("index.html")` come *after* the API route mappings. Static-file middleware skips any request that already matched an endpoint, so **do not map `/` to an endpoint** — it would shadow the Vue UI fallback (this is called out in a comment in `Program.cs`).
 - **Two different connection strings, two different readers**: `server/appsettings.Development.json` has a hardcoded dev connection string that `dotnet watch` reads directly on the host. Compose instead injects `ConnectionStrings__Db` as an env var (see `compose.dev.yaml`), which overrides it inside the container. `.env` (copy from `.env.example`) is read by Compose only, never by `dotnet watch`.
