@@ -9,6 +9,7 @@ services:
     restart: unless-stopped
     environment:
       ConnectionStrings__Db: Host=postgres;Database=hakutaku;Username=hakutaku;Password=${POSTGRES_PASSWORD};SSL Mode=Disable
+      HAKUTAKU_ADMIN_PASSWORD: ${HAKUTAKU_ADMIN_PASSWORD:-}
     depends_on:
       postgres:
         condition: service_healthy
