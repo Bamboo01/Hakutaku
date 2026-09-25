@@ -42,5 +42,39 @@ namespace server.Models
         public DbSet<Player> Players => Set<Player>();
         public DbSet<Character> Characters => Set<Character>();
         public DbSet<TelemetryEvent> TelemetryEvents => Set<TelemetryEvent>();
+        public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
+        public DbSet<AdminSession> AdminSessions => Set<AdminSession>();
+
+        // Admin tables follow the TDD conventions (bigint identity keys, snake_case names).
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<AdminUser>(e =>
+            {
+                e.ToTable("admin_users", t => t.HasCheckConstraint("ck_admin_users_role", "role IN (0, 1)"));
+                e.Property(x => x.Id).HasColumnName("id").UseIdentityAlwaysColumn();
+                e.Property(x => x.Email).HasColumnName("email");
+                e.Property(x => x.PwHash).HasColumnName("pw_hash");
+                e.Property(x => x.Role).HasColumnName("role");
+                e.Property(x => x.TotpSecret).HasColumnName("totp_secret");
+                e.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
+                e.Property(x => x.CreatedBy).HasColumnName("created_by");
+                e.Property(x => x.DisabledAt).HasColumnName("disabled_at");
+                e.HasOne<AdminUser>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.NoAction);
+            });
+
+            modelBuilder.Entity<AdminSession>(e =>
+            {
+                e.ToTable("admin_sessions");
+                e.Property(x => x.Id).HasColumnName("id").UseIdentityAlwaysColumn();
+                e.Property(x => x.AdminId).HasColumnName("admin_id");
+                e.Property(x => x.TokenHash).HasColumnName("token_hash");
+                e.Property(x => x.Ip).HasColumnName("ip");
+                e.Property(x => x.IssuedAt).HasColumnName("issued_at").HasDefaultValueSql("now()");
+                e.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+                e.Property(x => x.RevokedAt).HasColumnName("revoked_at");
+                e.HasIndex(x => x.TokenHash).IsUnique();
+                e.HasOne<AdminUser>().WithMany().HasForeignKey(x => x.AdminId).OnDelete(DeleteBehavior.Cascade);
+            });
+        }
     }
 }
