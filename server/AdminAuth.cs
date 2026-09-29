@@ -13,7 +13,13 @@ namespace server
     public static class AdminAuth
     {
         const string OwnerEmail = "admin";
-        const int SessionHours = 12;
+        const string CookieName = "hakutaku_admin_session";
+
+        // Absolute lifetime: the session dies at this point no matter how active it is.
+        const int AbsoluteHours = 12;
+        // Idle timeout: each authenticated request pushes this forward, capped at the
+        // absolute expiry. A forgotten tab dies on its own after this long unused.
+        const int IdleMinutes = 30;
 
         // OWASP's minimum Argon2id settings: 19 MiB of memory, 2 iterations, 1 lane.
         const int TimeCost = 2;
@@ -35,6 +41,20 @@ namespace server
 
         static IPAddress? Normalize(IPAddress? ip) =>
             ip is { IsIPv4MappedToIPv6: true } ? ip.MapToIPv4() : ip;
+
+        static string RoleName(AdminRole role) => role == AdminRole.Owner ? "owner" : "admin";
+
+        static CookieOptions SessionCookieOptions(HttpRequest request, DateTime expires) => new()
+        {
+            HttpOnly = true,
+            // Only marked Secure when the request itself arrived over HTTPS, so the
+            // cookie still works for local dev (plain HTTP) but is Secure in production,
+            // where UseForwardedHeaders() reports the scheme Caddy terminated.
+            Secure = request.IsHttps,
+            SameSite = SameSiteMode.Strict,
+            Expires = expires,
+            Path = "/",
+        };
 
         // Creates the owner account on first start, when no admins exist yet.
         public static async Task SeedOwner(Db db, IConfiguration config, ILogger logger)
@@ -59,20 +79,32 @@ namespace server
                 logger.LogInformation("Created the owner account '{Email}'.", OwnerEmail);
         }
 
-        // Looks up the session for the "Authorization: Bearer <token>" header, if it is still valid.
-        public static async Task<AdminSession?> FindActiveSession(Db db, HttpRequest request)
+        // Looks up the session cookie, if any, and checks it is still valid (not revoked,
+        // not past its absolute or idle expiry, and its admin isn't disabled). On success,
+        // pushes the idle expiry forward -- this is what "each request extends the
+        // session" means, and every caller of this method gets that for free.
+        public static async Task<(AdminSession Session, AdminUser Admin)?> FindActiveSession(Db db, HttpContext http)
         {
-            var header = request.Headers.Authorization.ToString();
-            const string prefix = "Bearer ";
-            if (!header.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return null;
+            if (!http.Request.Cookies.TryGetValue(CookieName, out var token) || string.IsNullOrEmpty(token))
+                return null;
 
-            var tokenHash = HashToken(header[prefix.Length..].Trim());
+            var tokenHash = HashToken(token);
             var now = DateTime.UtcNow;
-            return await db.AdminSessions.FirstOrDefaultAsync(s =>
+            var session = await db.AdminSessions.FirstOrDefaultAsync(s =>
                 s.TokenHash == tokenHash
                 && s.RevokedAt == null
                 && s.ExpiresAt > now
-                && db.AdminUsers.Any(a => a.Id == s.AdminId && a.DisabledAt == null));
+                && s.IdleExpiresAt > now);
+            if (session is null) return null;
+
+            var admin = await db.AdminUsers.FindAsync(session.AdminId);
+            if (admin is null || admin.DisabledAt is not null) return null;
+
+            var nextIdle = now.AddMinutes(IdleMinutes);
+            session.IdleExpiresAt = nextIdle < session.ExpiresAt ? nextIdle : session.ExpiresAt;
+            await db.SaveChangesAsync();
+
+            return (session, admin);
         }
 
         public static void MapAdminEndpoints(this WebApplication app)
@@ -91,28 +123,41 @@ namespace server
                     return Results.Json(new { error = "invalid credentials" }, statusCode: StatusCodes.Status401Unauthorized);
 
                 var token = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
+                var now = DateTime.UtcNow;
                 var session = new AdminSession
                 {
                     AdminId = admin.Id,
                     TokenHash = HashToken(token),
                     Ip = Normalize(http.Connection.RemoteIpAddress),
-                    ExpiresAt = DateTime.UtcNow.AddHours(SessionHours),
+                    ExpiresAt = now.AddHours(AbsoluteHours),
+                    IdleExpiresAt = now.AddMinutes(IdleMinutes),
                 };
                 db.AdminSessions.Add(session);
                 await db.SaveChangesAsync();
 
-                return Results.Ok(new { token, expiresAt = session.ExpiresAt });
+                http.Response.Cookies.Append(CookieName, token, SessionCookieOptions(http.Request, session.ExpiresAt));
+                return Results.NoContent();
             }).RequireRateLimiting("admin-login");
 
             app.MapPost("/api/admin/logout", async (Db db, HttpContext http) =>
             {
-                var session = await FindActiveSession(db, http.Request);
-                if (session is null)
+                var found = await FindActiveSession(db, http);
+                if (found is null)
                     return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
 
-                session.RevokedAt = DateTime.UtcNow;
+                found.Value.Session.RevokedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync();
+                http.Response.Cookies.Delete(CookieName, new CookieOptions { Path = "/" });
                 return Results.NoContent();
+            });
+
+            app.MapGet("/api/admin/me", async (Db db, HttpContext http) =>
+            {
+                var found = await FindActiveSession(db, http);
+                if (found is null)
+                    return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
+
+                return Results.Ok(new { email = found.Value.Admin.Email, role = RoleName(found.Value.Admin.Role) });
             });
         }
     }

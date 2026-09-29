@@ -94,8 +94,9 @@ than the admin ones below is open.**
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/Health` | Liveness check, returns `{"health":"ok"}` |
-| POST | `/api/admin/login` | Log in as an admin, returns a session token |
-| POST | `/api/admin/logout` | Revoke the current session token |
+| POST | `/api/admin/login` | Log in as an admin, sets a session cookie |
+| POST | `/api/admin/logout` | Revoke the current session and clear the cookie |
+| GET | `/api/admin/me` | Who the current session cookie belongs to |
 | GET | `/api/players` | List all players |
 | POST | `/api/players` | Create a player |
 | GET | `/api/characters` | List all characters |
@@ -143,22 +144,36 @@ The first time the app starts with no admins, it creates an owner account with
 the email `admin`. Its password comes from `HAKUTAKU_ADMIN_PASSWORD`; if that is
 unset, the app generates one and prints it once in its log.
 
+Login sets an `HttpOnly` session cookie rather than returning a token in the
+body — a browser handles it automatically, and curl needs a cookie jar (`-c`/`-b`):
+
 ```bash
-curl -X POST http://localhost:5008/api/admin/login \
+curl -c cookies.txt -X POST http://localhost:5008/api/admin/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin","password":"<password>"}'
-# {"token":"<token>","expiresAt":"2026-09-26T02:36:11Z"}
+# 204, Set-Cookie: hakutaku_admin_session=...
 
-curl -X POST http://localhost:5008/api/admin/logout \
-  -H "Authorization: Bearer <token>"
-# 204
+curl -b cookies.txt http://localhost:5008/api/admin/me
+# {"email":"admin","role":"owner"}
+
+curl -b cookies.txt -X POST http://localhost:5008/api/admin/logout
+# 204, clears the cookie
 ```
 
-Sessions last 12 hours. Email matching ignores case. Login answers `401` with
+`GET /api/admin/me` is what a front end calls on load to find out whether the
+cookie it already has (if any) is still good, without asking for a password
+again — it returns `401` if there's no cookie, or the cookie's session has
+expired or been revoked, and `200 {email, role}` otherwise.
+
+Two separate expiries apply to a session, whichever comes first: an **idle
+timeout** of 30 minutes, pushed forward by every authenticated request (a
+forgotten tab dies on its own), and an **absolute lifetime** of 12 hours that
+no amount of activity extends (a stolen cookie can't be kept alive forever).
+Email matching ignores case. Login answers `401` with
 `{"error":"invalid credentials"}` for a wrong password, an unknown email or a
 disabled account alike, `400` if a field is missing, and `429` after 5 attempts
-per minute from one IP. Logout answers `401` for a missing, wrong, expired or
-already-revoked token.
+per minute from one IP. Logout and `/me` answer `401` for a missing, wrong,
+expired or already-revoked cookie.
 
 ### Errors
 
@@ -166,7 +181,9 @@ Malformed JSON returns `400`. A `playerId` that doesn't match an existing player
 currently returns a bare `500` (a foreign-key violation), not a clean `4xx`.
 
 These shapes describe the early scaffold and will change as the schema develops.
-Owner-creates-admins, player login and anything else not listed above is not
+Nothing besides the admin endpoints checks the cookie yet, so every other
+endpoint above is still open. Owner-creates-admins, player login and anything
+else not listed above is not
 implemented yet — see [TODO.md](TODO.md).
 
 ## Backups

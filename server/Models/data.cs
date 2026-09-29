@@ -71,6 +71,7 @@ namespace server.Models
                 e.Property(x => x.Ip).HasColumnName("ip");
                 e.Property(x => x.IssuedAt).HasColumnName("issued_at").HasDefaultValueSql("now()");
                 e.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+                e.Property(x => x.IdleExpiresAt).HasColumnName("idle_expires_at");
                 e.Property(x => x.RevokedAt).HasColumnName("revoked_at");
                 e.HasIndex(x => x.TokenHash).IsUnique();
                 e.HasOne<AdminUser>().WithMany().HasForeignKey(x => x.AdminId).OnDelete(DeleteBehavior.Cascade);

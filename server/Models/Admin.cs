@@ -30,6 +30,9 @@ namespace server.Models
         public IPAddress? Ip { get; set; }
         public DateTime IssuedAt { get; set; }
         public DateTime ExpiresAt { get; set; }
+        // Pushed forward on each authenticated request, capped at ExpiresAt. A session
+        // dies at whichever of the two limits (idle or absolute) is hit first.
+        public DateTime IdleExpiresAt { get; set; }
         public DateTime? RevokedAt { get; set; }
     }
 }
