@@ -3,10 +3,11 @@
 ASP.NET Core API + Vue admin UI + Postgres, all in Docker.
 
 **Status: early scaffold.** Three entities (`Player`, `Character`,
-`TelemetryEvent`) with `GET`/`POST` endpoints for each (see [API](#api)), and no
-auth. The dev loop and the Docker build work, and `compose.yaml` runs a
-production stack behind Caddy with automatic HTTPS, redeployed by Jenkins on
-every merge to `master`. See [TODO.md](TODO.md) for what's missing.
+`TelemetryEvent`) with `GET`/`POST` endpoints for each (see [API](#api)),
+guarded by admin login — there's no separate player-facing auth yet. The dev
+loop and the Docker build work, and `compose.yaml` runs a production stack
+behind Caddy with automatic HTTPS, redeployed by Jenkins on every merge to
+`master`. See [TODO.md](TODO.md) for what's missing.
 
 ## Requirements
 
@@ -88,8 +89,10 @@ Everything is JSON. Base URL: `http://localhost:5008` under `dotnet watch`,
 `http://localhost` with the full Docker stack, `https://51.79.242.169.nip.io` on
 the team VM.
 
-**Admin login exists, but nothing is protected by it yet — every endpoint other
-than the admin ones below is open.**
+**Every endpoint below except `/Health` and admin login requires a logged-in
+admin session cookie** — there's no separate player-facing auth yet, so the
+player/character/event endpoints are locked behind admin login too, as a
+stopgap. `/api/admin/admins` is further restricted to the owner specifically.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -97,6 +100,8 @@ than the admin ones below is open.**
 | POST | `/api/admin/login` | Log in as an admin, sets a session cookie |
 | POST | `/api/admin/logout` | Revoke the current session and clear the cookie |
 | GET | `/api/admin/me` | Who the current session cookie belongs to |
+| POST | `/api/admin/admins` | Owner only: create a new admin |
+| DELETE | `/api/admin/admins/{id}` | Owner only: deactivate an admin |
 | GET | `/api/players` | List all players |
 | POST | `/api/players` | Create a player |
 | GET | `/api/characters` | List all characters |
@@ -123,17 +128,20 @@ also include `"player": null`, which you can ignore.
 
 ### Example
 
+These endpoints need a logged-in session cookie first (see Admin login below)
+— `-b cookies.txt` sends the cookie from that earlier login:
+
 ```bash
-curl -X POST http://localhost:5008/api/players \
+curl -b cookies.txt -X POST http://localhost:5008/api/players \
   -H "Content-Type: application/json" \
   -d '{"deviceId":"device-1","xp":0}'
 # {"id":"<player-id>","deviceId":"device-1","xp":0}
 
-curl -X POST http://localhost:5008/api/characters \
+curl -b cookies.txt -X POST http://localhost:5008/api/characters \
   -H "Content-Type: application/json" \
   -d '{"playerId":"<player-id>","name":"Hero"}'
 
-curl -X POST http://localhost:5008/api/events \
+curl -b cookies.txt -X POST http://localhost:5008/api/events \
   -H "Content-Type: application/json" \
   -d '{"playerId":"<player-id>","eventType":"level_up","data":"{\"level\":2}"}'
 ```
@@ -141,8 +149,12 @@ curl -X POST http://localhost:5008/api/events \
 ### Admin login
 
 The first time the app starts with no admins, it creates an owner account with
-the email `admin`. Its password comes from `HAKUTAKU_ADMIN_PASSWORD`; if that is
-unset, the app generates one and prints it once in its log.
+the username `admin`. Its password comes from `HAKUTAKU_ADMIN_PASSWORD`; if that
+is unset, the app generates one and prints it once in its log.
+
+Login is by **username**, not email — `username` is the unique login identifier
+(case-insensitive); `email` is optional account metadata (for future report
+hooks) and isn't used to log in.
 
 Login sets an `HttpOnly` session cookie rather than returning a token in the
 body — a browser handles it automatically, and curl needs a cookie jar (`-c`/`-b`):
@@ -150,11 +162,11 @@ body — a browser handles it automatically, and curl needs a cookie jar (`-c`/`
 ```bash
 curl -c cookies.txt -X POST http://localhost:5008/api/admin/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin","password":"<password>"}'
+  -d '{"username":"admin","password":"<password>"}'
 # 204, Set-Cookie: hakutaku_admin_session=...
 
 curl -b cookies.txt http://localhost:5008/api/admin/me
-# {"email":"admin","role":"owner"}
+# {"username":"admin","email":null,"role":"owner"}
 
 curl -b cookies.txt -X POST http://localhost:5008/api/admin/logout
 # 204, clears the cookie
@@ -163,17 +175,43 @@ curl -b cookies.txt -X POST http://localhost:5008/api/admin/logout
 `GET /api/admin/me` is what a front end calls on load to find out whether the
 cookie it already has (if any) is still good, without asking for a password
 again — it returns `401` if there's no cookie, or the cookie's session has
-expired or been revoked, and `200 {email, role}` otherwise.
+expired or been revoked, and `200 {username, email, role}` otherwise.
 
 Two separate expiries apply to a session, whichever comes first: an **idle
 timeout** of 30 minutes, pushed forward by every authenticated request (a
 forgotten tab dies on its own), and an **absolute lifetime** of 12 hours that
 no amount of activity extends (a stolen cookie can't be kept alive forever).
-Email matching ignores case. Login answers `401` with
-`{"error":"invalid credentials"}` for a wrong password, an unknown email or a
-disabled account alike, `400` if a field is missing, and `429` after 5 attempts
-per minute from one IP. Logout and `/me` answer `401` for a missing, wrong,
-expired or already-revoked cookie.
+Username matching ignores case. Login answers `401` with
+`{"error":"invalid credentials"}` for a wrong password, an unknown username or
+a disabled account alike, `400` if a field is missing, and `429` after 5
+attempts per minute from one IP. Logout and `/me` answer `401` for a missing,
+wrong, expired or already-revoked cookie.
+
+### Admin account management
+
+`POST /api/admin/admins` and `DELETE /api/admin/admins/{id}` require a valid
+session cookie belonging to the **owner** specifically — a regular admin gets
+`403 {"error":"owner only"}`. There's only ever one owner (the one seeded at
+first start); this endpoint can't create another.
+
+```bash
+curl -b cookies.txt -X POST http://localhost:5008/api/admin/admins \
+  -H "Content-Type: application/json" \
+  -d '{"username":"bob","password":"a-real-password"}'
+# 200 {"id":5,"username":"bob","role":"admin"}
+
+curl -b cookies.txt -X DELETE http://localhost:5008/api/admin/admins/5
+# 204
+```
+
+`401` if not logged in at all, `403 owner only` if logged in as a non-owner
+admin, `400` for a missing username or a password under 8 characters, `409` for
+a username already taken. Deleting is one-way (sets `disabled_at`, doesn't
+hard-delete — there's no restore endpoint, since it isn't needed) and also
+revokes that admin's active sessions immediately, so a deactivation takes
+effect right away rather than waiting for their cookie to expire on its own.
+The **owner account itself can never be deactivated** this way — `403` if you
+try, regardless of who's asking.
 
 ### Errors
 
@@ -181,10 +219,8 @@ Malformed JSON returns `400`. A `playerId` that doesn't match an existing player
 currently returns a bare `500` (a foreign-key violation), not a clean `4xx`.
 
 These shapes describe the early scaffold and will change as the schema develops.
-Nothing besides the admin endpoints checks the cookie yet, so every other
-endpoint above is still open. Owner-creates-admins, player login and anything
-else not listed above is not
-implemented yet — see [TODO.md](TODO.md).
+Player login and anything not listed above is not implemented yet — see
+[TODO.md](TODO.md).
 
 ## Backups
 

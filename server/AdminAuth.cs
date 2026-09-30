@@ -4,15 +4,17 @@ using System.Security.Cryptography;
 using System.Text;
 using Isopoh.Cryptography.Argon2;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using server.Models;
 
 namespace server
 {
-    public record LoginRequest(string? Email, string? Password);
+    public record LoginRequest(string? Username, string? Password);
+    public record CreateAdminRequest(string? Username, string? Password);
 
     public static class AdminAuth
     {
-        const string OwnerEmail = "admin";
+        const string OwnerUsername = "admin";
         const string CookieName = "hakutaku_admin_session";
 
         // Absolute lifetime: the session dies at this point no matter how active it is.
@@ -27,7 +29,7 @@ namespace server
         const int Lanes = 1;
         const int HashLength = 32;
 
-        // Checked against when the email is unknown, so a miss takes as long as a wrong password.
+        // Checked against when the username is unknown, so a miss takes as long as a wrong password.
         static readonly string DummyHash = HashPassword("dummy-password-for-timing");
 
         public static string HashPassword(string password) =>
@@ -67,16 +69,16 @@ namespace server
 
             db.AdminUsers.Add(new AdminUser
             {
-                Email = OwnerEmail,
+                Username = OwnerUsername,
                 PwHash = HashPassword(password!),
                 Role = AdminRole.Owner,
             });
             await db.SaveChangesAsync();
 
             if (generated)
-                logger.LogWarning("Created the owner account '{Email}' with the generated password {Password}. It is shown only once.", OwnerEmail, password);
+                logger.LogWarning("Created the owner account '{Username}' with the generated password {Password}. It is shown only once.", OwnerUsername, password);
             else
-                logger.LogInformation("Created the owner account '{Email}'.", OwnerEmail);
+                logger.LogInformation("Created the owner account '{Username}'.", OwnerUsername);
         }
 
         // Looks up the session cookie, if any, and checks it is still valid (not revoked,
@@ -107,16 +109,44 @@ namespace server
             return (session, admin);
         }
 
+        // Requires an active session belonging to the owner specifically (not just any
+        // admin) -- per the TDD, admin creation/deletion goes through the owner only.
+        static async Task<(AdminUser? Owner, IResult? Error)> RequireOwner(Db db, HttpContext http)
+        {
+            var found = await FindActiveSession(db, http);
+            if (found is null)
+                return (null, Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized));
+            if (found.Value.Admin.Role != AdminRole.Owner)
+                return (null, Results.Json(new { error = "owner only" }, statusCode: StatusCodes.Status403Forbidden));
+            return (found.Value.Admin, null);
+        }
+
+        // Chainable like .RequireRateLimiting(...): app.MapGet(...).RequireAdmin(). Lets
+        // in any logged-in admin or the owner; use RequireOwner (above) inside a handler
+        // when only the owner specifically should be allowed.
+        public static TBuilder RequireAdmin<TBuilder>(this TBuilder builder) where TBuilder : IEndpointConventionBuilder
+        {
+            builder.AddEndpointFilter(async (context, next) =>
+            {
+                var db = context.HttpContext.RequestServices.GetRequiredService<Db>();
+                var found = await FindActiveSession(db, context.HttpContext);
+                if (found is null)
+                    return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
+                return await next(context);
+            });
+            return builder;
+        }
+
         public static void MapAdminEndpoints(this WebApplication app)
         {
             app.MapPost("/api/admin/login", async (Db db, HttpContext http, LoginRequest request) =>
             {
-                if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrEmpty(request.Password)
-                    || request.Email.Length > 254 || request.Password.Length > 256)
-                    return Results.BadRequest(new { error = "email and password are required" });
+                if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrEmpty(request.Password)
+                    || request.Username.Length > 254 || request.Password.Length > 256)
+                    return Results.BadRequest(new { error = "username and password are required" });
 
-                var email = request.Email.Trim().ToLowerInvariant();
-                var admin = await db.AdminUsers.FirstOrDefaultAsync(a => a.Email.ToLower() == email);
+                var username = request.Username.Trim().ToLowerInvariant();
+                var admin = await db.AdminUsers.FirstOrDefaultAsync(a => a.Username.ToLower() == username);
 
                 var passwordOk = VerifyPassword(admin?.PwHash ?? DummyHash, request.Password);
                 if (admin is null || admin.DisabledAt is not null || !passwordOk)
@@ -157,7 +187,70 @@ namespace server
                 if (found is null)
                     return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
 
-                return Results.Ok(new { email = found.Value.Admin.Email, role = RoleName(found.Value.Admin.Role) });
+                return Results.Ok(new
+                {
+                    username = found.Value.Admin.Username,
+                    email = found.Value.Admin.Email,
+                    role = RoleName(found.Value.Admin.Role),
+                });
+            });
+
+            // Owner only. Always creates a regular admin -- there's only ever one owner,
+            // the one seeded at first start, per the TDD ("one default super admin account").
+            app.MapPost("/api/admin/admins", async (Db db, HttpContext http, CreateAdminRequest request) =>
+            {
+                var (owner, error) = await RequireOwner(db, http);
+                if (error is not null) return error;
+
+                if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrEmpty(request.Password)
+                    || request.Username.Length > 254 || request.Password.Length < 8 || request.Password.Length > 256)
+                    return Results.BadRequest(new { error = "username is required and password must be 8-256 characters" });
+
+                var admin = new AdminUser
+                {
+                    Username = request.Username.Trim(),
+                    PwHash = HashPassword(request.Password),
+                    Role = AdminRole.Admin,
+                    CreatedBy = owner!.Id,
+                };
+                db.AdminUsers.Add(admin);
+
+                try
+                {
+                    await db.SaveChangesAsync();
+                }
+                catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23505" })
+                {
+                    return Results.Json(new { error = "username already taken" }, statusCode: StatusCodes.Status409Conflict);
+                }
+
+                return Results.Ok(new { id = admin.Id, username = admin.Username, role = RoleName(admin.Role) });
+            });
+
+            // Owner only. One-way: sets disabled_at, doesn't hard-delete (matches the
+            // TDD's "nothing is hard-deleted" convention) and there's no restore endpoint
+            // since the team doesn't need one. Also kills that admin's active sessions,
+            // so a deactivation takes effect immediately rather than waiting for their
+            // cookie to expire on its own.
+            app.MapDelete("/api/admin/admins/{id}", async (Db db, HttpContext http, long id) =>
+            {
+                var (owner, error) = await RequireOwner(db, http);
+                if (error is not null) return error;
+
+                var target = await db.AdminUsers.FindAsync(id);
+                if (target is null)
+                    return Results.NotFound(new { error = "no such admin" });
+                if (target.Role == AdminRole.Owner)
+                    return Results.Json(new { error = "the owner account can't be deactivated" }, statusCode: StatusCodes.Status403Forbidden);
+
+                var now = DateTime.UtcNow;
+                target.DisabledAt = now;
+                await db.AdminSessions
+                    .Where(s => s.AdminId == target.Id && s.RevokedAt == null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now));
+                await db.SaveChangesAsync();
+
+                return Results.NoContent();
             });
         }
     }
