@@ -88,8 +88,8 @@ Everything is JSON. Base URL: `http://localhost:5008` under `dotnet watch`,
 `http://localhost` with the full Docker stack, `https://51.79.242.169.nip.io` on
 the team VM.
 
-**Admin login exists, but nothing is protected by it yet — every endpoint other
-than the admin ones below is open.**
+**Admin login and account management are owner-guarded now, but nothing else
+is protected yet — every non-admin endpoint below is still open.**
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -97,6 +97,8 @@ than the admin ones below is open.**
 | POST | `/api/admin/login` | Log in as an admin, sets a session cookie |
 | POST | `/api/admin/logout` | Revoke the current session and clear the cookie |
 | GET | `/api/admin/me` | Who the current session cookie belongs to |
+| POST | `/api/admin/admins` | Owner only: create a new admin |
+| DELETE | `/api/admin/admins/{id}` | Owner only: deactivate an admin |
 | GET | `/api/players` | List all players |
 | POST | `/api/players` | Create a player |
 | GET | `/api/characters` | List all characters |
@@ -179,16 +181,41 @@ a disabled account alike, `400` if a field is missing, and `429` after 5
 attempts per minute from one IP. Logout and `/me` answer `401` for a missing,
 wrong, expired or already-revoked cookie.
 
+### Admin account management
+
+`POST /api/admin/admins` and `DELETE /api/admin/admins/{id}` require a valid
+session cookie belonging to the **owner** specifically — a regular admin gets
+`403 {"error":"owner only"}`. There's only ever one owner (the one seeded at
+first start); this endpoint can't create another.
+
+```bash
+curl -b cookies.txt -X POST http://localhost:5008/api/admin/admins \
+  -H "Content-Type: application/json" \
+  -d '{"username":"bob","password":"a-real-password"}'
+# 200 {"id":5,"username":"bob","role":"admin"}
+
+curl -b cookies.txt -X DELETE http://localhost:5008/api/admin/admins/5
+# 204
+```
+
+`401` if not logged in at all, `403 owner only` if logged in as a non-owner
+admin, `400` for a missing username or a password under 8 characters, `409` for
+a username already taken. Deleting is one-way (sets `disabled_at`, doesn't
+hard-delete — there's no restore endpoint, since it isn't needed) and also
+revokes that admin's active sessions immediately, so a deactivation takes
+effect right away rather than waiting for their cookie to expire on its own.
+The **owner account itself can never be deactivated** this way — `403` if you
+try, regardless of who's asking.
+
 ### Errors
 
 Malformed JSON returns `400`. A `playerId` that doesn't match an existing player
 currently returns a bare `500` (a foreign-key violation), not a clean `4xx`.
 
 These shapes describe the early scaffold and will change as the schema develops.
-Nothing besides the admin endpoints checks the cookie yet, so every other
-endpoint above is still open. Owner-creates-admins, player login and anything
-else not listed above is not
-implemented yet — see [TODO.md](TODO.md).
+Nothing besides the admin endpoints checks the cookie yet, so every non-admin
+endpoint above is still open. Player login and anything not listed above is
+not implemented yet — see [TODO.md](TODO.md).
 
 ## Backups
 
