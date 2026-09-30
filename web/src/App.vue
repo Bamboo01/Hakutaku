@@ -4,6 +4,7 @@
 import { computed, ref } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { api, currentUser } from './api'
+import { navLinks } from './router'
 
 const route = useRoute()
 const router = useRouter()
@@ -12,9 +13,7 @@ const open = ref(false)
 // The login page renders bare -- no nav for someone who isn't signed in.
 const showShell = computed(() => route.name !== 'login')
 
-const links = computed(() =>
-  router.getRoutes().filter((r) => r.meta.nav && (!r.meta.owner || currentUser.value?.role === 'owner')),
-)
+const links = computed(() => navLinks.filter((l) => !l.ownerOnly || currentUser.value?.role === 'owner'))
 
 const THEME_KEY = 'hakutaku-theme'
 const forced = ref<'light' | 'dark' | null>(
@@ -61,7 +60,7 @@ async function logout() {
     <aside v-if="showShell && open">
       <nav>
         <RouterLink v-for="l in links" :key="l.path" :to="l.path" @click="open = false">
-          {{ l.meta.nav }}
+          {{ l.label }}
         </RouterLink>
       </nav>
     </aside>

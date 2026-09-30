@@ -20,7 +20,7 @@ async function submit() {
     await api.post('/api/admin/login', { username: username.value, password: password.value })
     await refreshSession()
     const next = route.query.next
-    await router.replace(typeof next === 'string' ? next : { name: 'admins' })
+    await router.replace(typeof next === 'string' ? next : { name: 'home' })
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : 'Could not reach the server.'
   } finally {
