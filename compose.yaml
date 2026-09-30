@@ -45,7 +45,10 @@ services:
     environment:
       HAKUTAKU_DOMAIN: ${HAKUTAKU_DOMAIN}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Mount the directory, not the file: a single-file bind mount pins the
+      # inode, and git replaces files rather than editing them, so the container
+      # would keep serving stale config until recreated.
+      - ./caddy:/etc/caddy:ro
       - caddy_data:/data       # issued certificates + ACME account key
       - caddy_config:/config
     depends_on:
