@@ -10,6 +10,10 @@ services:
     environment:
       ConnectionStrings__Db: Host=postgres;Database=hakutaku;Username=hakutaku;Password=${POSTGRES_PASSWORD};SSL Mode=Disable
       HAKUTAKU_ADMIN_PASSWORD: ${HAKUTAKU_ADMIN_PASSWORD:-}
+    ports:
+      # Caddy on 443 stays the sole public entry point
+      # Host port 8090 because Jenkins already holds 8080.
+      - "127.0.0.1:8090:8080"
     depends_on:
       postgres:
         condition: service_healthy
