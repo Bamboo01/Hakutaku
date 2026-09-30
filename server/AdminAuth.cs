@@ -195,6 +195,26 @@ namespace server
                 });
             });
 
+            // Owner only. Includes deactivated admins: the page needs disabledAt to show
+            // state, and the id to target a deactivation. Added by Sherwyn for the admins page.
+            app.MapGet("/api/admin/admins", async (Db db, HttpContext http) =>
+            {
+                var (_, error) = await RequireOwner(db, http);
+                if (error is not null) return error;
+
+                // Materialised before projecting so RoleName stays reusable -- EF can't
+                // translate a local method into SQL. The table is tiny, so this is fine.
+                var admins = await db.AdminUsers.OrderBy(a => a.Id).ToListAsync();
+                return Results.Ok(admins.Select(a => new
+                {
+                    id = a.Id,
+                    username = a.Username,
+                    role = RoleName(a.Role),
+                    createdAt = a.CreatedAt,
+                    disabledAt = a.DisabledAt,
+                }));
+            });
+
             // Owner only. Always creates a regular admin -- there's only ever one owner,
             // the one seeded at first start, per the TDD ("one default super admin account").
             app.MapPost("/api/admin/admins", async (Db db, HttpContext http, CreateAdminRequest request) =>

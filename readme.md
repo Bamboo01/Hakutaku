@@ -222,6 +222,25 @@ These shapes describe the early scaffold and will change as the schema develops.
 Player login and anything not listed above is not implemented yet — see
 [TODO.md](TODO.md).
 
+## Reaching the admin UI on the VM
+
+`compose.yaml` publishes the app on the VM's loopback only (`127.0.0.1:8090`),
+so it is not reachable from the internet. Host port 8090 rather than 8080
+because Jenkins already holds that one.
+
+Forward it over SSH, the same way you reach Jenkins:
+
+```bash
+ssh -L 8090:localhost:8090 team43@51.79.242.169
+```
+
+Then open <http://localhost:8090> and log in as usual. The session cookie is not
+marked `Secure` over the tunnel (it is plain HTTP inside the tunnel), which is
+fine because SSH already encrypts the hop.
+
+This adds a private way in; it does not close the public one. `/api/admin/*` is
+still served on the public domain until Caddy is told otherwise.
+
 ## Backups
 
 The dev database is named `hakutaku` and owned by `hakutaku`:
