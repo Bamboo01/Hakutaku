@@ -8,11 +8,11 @@ using server.Models;
 
 namespace server
 {
-    public record LoginRequest(string? Email, string? Password);
+    public record LoginRequest(string? Username, string? Password);
 
     public static class AdminAuth
     {
-        const string OwnerEmail = "admin";
+        const string OwnerUsername = "admin";
         const string CookieName = "hakutaku_admin_session";
 
         // Absolute lifetime: the session dies at this point no matter how active it is.
@@ -27,7 +27,7 @@ namespace server
         const int Lanes = 1;
         const int HashLength = 32;
 
-        // Checked against when the email is unknown, so a miss takes as long as a wrong password.
+        // Checked against when the username is unknown, so a miss takes as long as a wrong password.
         static readonly string DummyHash = HashPassword("dummy-password-for-timing");
 
         public static string HashPassword(string password) =>
@@ -67,16 +67,16 @@ namespace server
 
             db.AdminUsers.Add(new AdminUser
             {
-                Email = OwnerEmail,
+                Username = OwnerUsername,
                 PwHash = HashPassword(password!),
                 Role = AdminRole.Owner,
             });
             await db.SaveChangesAsync();
 
             if (generated)
-                logger.LogWarning("Created the owner account '{Email}' with the generated password {Password}. It is shown only once.", OwnerEmail, password);
+                logger.LogWarning("Created the owner account '{Username}' with the generated password {Password}. It is shown only once.", OwnerUsername, password);
             else
-                logger.LogInformation("Created the owner account '{Email}'.", OwnerEmail);
+                logger.LogInformation("Created the owner account '{Username}'.", OwnerUsername);
         }
 
         // Looks up the session cookie, if any, and checks it is still valid (not revoked,
@@ -111,12 +111,12 @@ namespace server
         {
             app.MapPost("/api/admin/login", async (Db db, HttpContext http, LoginRequest request) =>
             {
-                if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrEmpty(request.Password)
-                    || request.Email.Length > 254 || request.Password.Length > 256)
-                    return Results.BadRequest(new { error = "email and password are required" });
+                if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrEmpty(request.Password)
+                    || request.Username.Length > 254 || request.Password.Length > 256)
+                    return Results.BadRequest(new { error = "username and password are required" });
 
-                var email = request.Email.Trim().ToLowerInvariant();
-                var admin = await db.AdminUsers.FirstOrDefaultAsync(a => a.Email.ToLower() == email);
+                var username = request.Username.Trim().ToLowerInvariant();
+                var admin = await db.AdminUsers.FirstOrDefaultAsync(a => a.Username.ToLower() == username);
 
                 var passwordOk = VerifyPassword(admin?.PwHash ?? DummyHash, request.Password);
                 if (admin is null || admin.DisabledAt is not null || !passwordOk)
@@ -157,7 +157,12 @@ namespace server
                 if (found is null)
                     return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
 
-                return Results.Ok(new { email = found.Value.Admin.Email, role = RoleName(found.Value.Admin.Role) });
+                return Results.Ok(new
+                {
+                    username = found.Value.Admin.Username,
+                    email = found.Value.Admin.Email,
+                    role = RoleName(found.Value.Admin.Role),
+                });
             });
         }
     }

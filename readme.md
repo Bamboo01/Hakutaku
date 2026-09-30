@@ -141,8 +141,12 @@ curl -X POST http://localhost:5008/api/events \
 ### Admin login
 
 The first time the app starts with no admins, it creates an owner account with
-the email `admin`. Its password comes from `HAKUTAKU_ADMIN_PASSWORD`; if that is
-unset, the app generates one and prints it once in its log.
+the username `admin`. Its password comes from `HAKUTAKU_ADMIN_PASSWORD`; if that
+is unset, the app generates one and prints it once in its log.
+
+Login is by **username**, not email — `username` is the unique login identifier
+(case-insensitive); `email` is optional account metadata (for future report
+hooks) and isn't used to log in.
 
 Login sets an `HttpOnly` session cookie rather than returning a token in the
 body — a browser handles it automatically, and curl needs a cookie jar (`-c`/`-b`):
@@ -150,11 +154,11 @@ body — a browser handles it automatically, and curl needs a cookie jar (`-c`/`
 ```bash
 curl -c cookies.txt -X POST http://localhost:5008/api/admin/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin","password":"<password>"}'
+  -d '{"username":"admin","password":"<password>"}'
 # 204, Set-Cookie: hakutaku_admin_session=...
 
 curl -b cookies.txt http://localhost:5008/api/admin/me
-# {"email":"admin","role":"owner"}
+# {"username":"admin","email":null,"role":"owner"}
 
 curl -b cookies.txt -X POST http://localhost:5008/api/admin/logout
 # 204, clears the cookie
@@ -163,17 +167,17 @@ curl -b cookies.txt -X POST http://localhost:5008/api/admin/logout
 `GET /api/admin/me` is what a front end calls on load to find out whether the
 cookie it already has (if any) is still good, without asking for a password
 again — it returns `401` if there's no cookie, or the cookie's session has
-expired or been revoked, and `200 {email, role}` otherwise.
+expired or been revoked, and `200 {username, email, role}` otherwise.
 
 Two separate expiries apply to a session, whichever comes first: an **idle
 timeout** of 30 minutes, pushed forward by every authenticated request (a
 forgotten tab dies on its own), and an **absolute lifetime** of 12 hours that
 no amount of activity extends (a stolen cookie can't be kept alive forever).
-Email matching ignores case. Login answers `401` with
-`{"error":"invalid credentials"}` for a wrong password, an unknown email or a
-disabled account alike, `400` if a field is missing, and `429` after 5 attempts
-per minute from one IP. Logout and `/me` answer `401` for a missing, wrong,
-expired or already-revoked cookie.
+Username matching ignores case. Login answers `401` with
+`{"error":"invalid credentials"}` for a wrong password, an unknown username or
+a disabled account alike, `400` if a field is missing, and `429` after 5
+attempts per minute from one IP. Logout and `/me` answer `401` for a missing,
+wrong, expired or already-revoked cookie.
 
 ### Errors
 

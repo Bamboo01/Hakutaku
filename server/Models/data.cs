@@ -52,6 +52,7 @@ namespace server.Models
             {
                 e.ToTable("admin_users", t => t.HasCheckConstraint("ck_admin_users_role", "role IN (0, 1)"));
                 e.Property(x => x.Id).HasColumnName("id").UseIdentityAlwaysColumn();
+                e.Property(x => x.Username).HasColumnName("username");
                 e.Property(x => x.Email).HasColumnName("email");
                 e.Property(x => x.PwHash).HasColumnName("pw_hash");
                 e.Property(x => x.Role).HasColumnName("role");
