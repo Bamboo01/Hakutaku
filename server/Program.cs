@@ -53,30 +53,33 @@ app.UseRateLimiter();
 // NOTE: do not map "/" to an endpoint. Static-file middleware skips any request
 // that already matched an endpoint, so a route here shadows the Vue UI below.
 app.MapGet("/Health", () => Results.Ok( new { health = "ok" } ));
-app.MapGet("/api/players", async (server.Models.Db db) => await db.Players.ToListAsync());
+// Admin-or-owner only for now -- there's no separate player-facing auth yet,
+// so this is the only thing standing between these endpoints and the public
+// internet. See TODO.md for the planned player login.
+app.MapGet("/api/players", async (server.Models.Db db) => await db.Players.ToListAsync()).RequireAdmin();
 app.MapPost("/api/players", async (server.Models.Db db, server.Models.Player p) =>
 {
     db.Players.Add(p);
     await db.SaveChangesAsync();
     return Results.Ok(p);
-});
+}).RequireAdmin();
 
-app.MapGet("/api/characters", async (server.Models.Db db) => await db.Characters.ToListAsync());
+app.MapGet("/api/characters", async (server.Models.Db db) => await db.Characters.ToListAsync()).RequireAdmin();
 app.MapPost("/api/characters", async (server.Models.Db db, server.Models.Character c) =>
 {
     db.Characters.Add(c);
     await db.SaveChangesAsync();
     return Results.Ok(c);
-});
+}).RequireAdmin();
 
-app.MapGet("/api/events", async (server.Models.Db db) => await db.TelemetryEvents.ToListAsync());
+app.MapGet("/api/events", async (server.Models.Db db) => await db.TelemetryEvents.ToListAsync()).RequireAdmin();
 app.MapPost("/api/events", async (server.Models.Db db, server.Models.TelemetryEvent e) =>
 {
     e.Timestamp = DateTime.UtcNow;
     db.TelemetryEvents.Add(e);
     await db.SaveChangesAsync();
     return Results.Ok(e);
-});
+}).RequireAdmin();
 
 app.MapAdminEndpoints();
 

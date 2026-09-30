@@ -121,6 +121,22 @@ namespace server
             return (found.Value.Admin, null);
         }
 
+        // Chainable like .RequireRateLimiting(...): app.MapGet(...).RequireAdmin(). Lets
+        // in any logged-in admin or the owner; use RequireOwner (above) inside a handler
+        // when only the owner specifically should be allowed.
+        public static TBuilder RequireAdmin<TBuilder>(this TBuilder builder) where TBuilder : IEndpointConventionBuilder
+        {
+            builder.AddEndpointFilter(async (context, next) =>
+            {
+                var db = context.HttpContext.RequestServices.GetRequiredService<Db>();
+                var found = await FindActiveSession(db, context.HttpContext);
+                if (found is null)
+                    return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
+                return await next(context);
+            });
+            return builder;
+        }
+
         public static void MapAdminEndpoints(this WebApplication app)
         {
             app.MapPost("/api/admin/login", async (Db db, HttpContext http, LoginRequest request) =>

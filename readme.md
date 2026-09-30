@@ -3,10 +3,11 @@
 ASP.NET Core API + Vue admin UI + Postgres, all in Docker.
 
 **Status: early scaffold.** Three entities (`Player`, `Character`,
-`TelemetryEvent`) with `GET`/`POST` endpoints for each (see [API](#api)), and no
-auth. The dev loop and the Docker build work, and `compose.yaml` runs a
-production stack behind Caddy with automatic HTTPS, redeployed by Jenkins on
-every merge to `master`. See [TODO.md](TODO.md) for what's missing.
+`TelemetryEvent`) with `GET`/`POST` endpoints for each (see [API](#api)),
+guarded by admin login — there's no separate player-facing auth yet. The dev
+loop and the Docker build work, and `compose.yaml` runs a production stack
+behind Caddy with automatic HTTPS, redeployed by Jenkins on every merge to
+`master`. See [TODO.md](TODO.md) for what's missing.
 
 ## Requirements
 
@@ -88,8 +89,10 @@ Everything is JSON. Base URL: `http://localhost:5008` under `dotnet watch`,
 `http://localhost` with the full Docker stack, `https://51.79.242.169.nip.io` on
 the team VM.
 
-**Admin login and account management are owner-guarded now, but nothing else
-is protected yet — every non-admin endpoint below is still open.**
+**Every endpoint below except `/Health` and admin login requires a logged-in
+admin session cookie** — there's no separate player-facing auth yet, so the
+player/character/event endpoints are locked behind admin login too, as a
+stopgap. `/api/admin/admins` is further restricted to the owner specifically.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -125,17 +128,20 @@ also include `"player": null`, which you can ignore.
 
 ### Example
 
+These endpoints need a logged-in session cookie first (see Admin login below)
+— `-b cookies.txt` sends the cookie from that earlier login:
+
 ```bash
-curl -X POST http://localhost:5008/api/players \
+curl -b cookies.txt -X POST http://localhost:5008/api/players \
   -H "Content-Type: application/json" \
   -d '{"deviceId":"device-1","xp":0}'
 # {"id":"<player-id>","deviceId":"device-1","xp":0}
 
-curl -X POST http://localhost:5008/api/characters \
+curl -b cookies.txt -X POST http://localhost:5008/api/characters \
   -H "Content-Type: application/json" \
   -d '{"playerId":"<player-id>","name":"Hero"}'
 
-curl -X POST http://localhost:5008/api/events \
+curl -b cookies.txt -X POST http://localhost:5008/api/events \
   -H "Content-Type: application/json" \
   -d '{"playerId":"<player-id>","eventType":"level_up","data":"{\"level\":2}"}'
 ```
@@ -213,9 +219,8 @@ Malformed JSON returns `400`. A `playerId` that doesn't match an existing player
 currently returns a bare `500` (a foreign-key violation), not a clean `4xx`.
 
 These shapes describe the early scaffold and will change as the schema develops.
-Nothing besides the admin endpoints checks the cookie yet, so every non-admin
-endpoint above is still open. Player login and anything not listed above is
-not implemented yet — see [TODO.md](TODO.md).
+Player login and anything not listed above is not implemented yet — see
+[TODO.md](TODO.md).
 
 ## Backups
 
