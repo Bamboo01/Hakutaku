@@ -1,16 +1,23 @@
 {$HAKUTAKU_DOMAIN} {
+
 	# The API is tunnel-only
 	# Nothing under /api has a public access point yet!!
 	# The current endpoints are all admin-gated, and a session cookie can only be minted
 	# through when logging in through SSH tunnel (see the readme). 
 	# 404 rather than 403 so this doesn't confirm the routes exist.
 	# Narrow this to /api/admin/* once players and game servers need public access.
-	handle /api/* {
-		respond 404
+	# handle /api/* {
+	#	respond 404
+	#}
+
+	# Default-deny: only what's named here is public. The admin UI and its API
+	# live behind the SSH tunnel (see the readme), which bypasses Caddy entirely.
+	# Add a handle block per public route when players and game servers land.
+	handle /Health {
+		reverse_proxy app:8080
 	}
 
-	# Everything else: the Vue UI out of wwwroot, and /Health for the smoke test.
 	handle {
-		reverse_proxy app:8080
+		respond 404
 	}
 }

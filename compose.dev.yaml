@@ -15,6 +15,11 @@ services:
         # starts. The app runs migrations on boot and crashes if the database
         # isn't up yet -- on a first run, initdb takes a few seconds.
         condition: service_healthy
+    ports:
+      # Mirrors compose.yaml: the shared Caddyfile is default-deny, so reach the
+      # UI here rather than through Caddy on :80. In production the same port is
+      # reached over an SSH tunnel instead.
+      - "127.0.0.1:8090:8080"
 
   postgres:
     image: postgres:18

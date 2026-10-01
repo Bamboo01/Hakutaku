@@ -238,8 +238,10 @@ Then open <http://localhost:8090> and log in as usual. The session cookie is not
 marked `Secure` over the tunnel (it is plain HTTP inside the tunnel), which is
 fine because SSH already encrypts the hop.
 
-This adds a private way in; it does not close the public one. `/api/admin/*` is
-still served on the public domain until Caddy is told otherwise.
+The tunnel is the *only* way in: `caddy/Caddyfile` is default-deny, serving
+`/Health` publicly and answering `404` for everything else, including the UI
+itself. Nothing on the public domain can reach the admin API or even tell that
+an admin panel exists.
 
 ## Backups
 
