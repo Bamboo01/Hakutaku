@@ -1,0 +1,81 @@
+site_name: Hakutaku
+site_description: Onboarding wiki for the Hakutaku game backend.
+repo_url: https://github.com/Bamboo01/Hakutaku
+repo_name: Bamboo01/Hakutaku
+edit_uri: edit/master/docs/
+
+# mkdocs serve binds 127.0.0.1 by default, which only you can reach. 0.0.0.0 is
+# the part that opens it to the network -- the port is just where it lands.
+dev_addr: 0.0.0.0:5020
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: light green
+      accent: green
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: light green
+      accent: light green
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - toc.follow
+    - search.suggest
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  # This block is what makes ```mermaid fences render as diagrams.
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Home: index.md
+  - Setup: setup.md
+  - Architecture:
+      - Project structure: architecture/structure.md
+      - How the pieces talk: architecture/communication.md
+      - Practices and exposure: architecture/practices.md
+  - Components:
+      - Caddy: components/caddy.md
+      - Docker: components/docker.md
+      - Database: components/database.md
+      - Server: components/server.md
+      - Auth and sessions: components/auth.md
+      - Web UI: components/web.md
+      - Simulator: components/simulator.md
+      - SDK: components/sdk.md
+  - Operations:
+      - Deploy and CI/CD: operations/deploy.md
+  - Reference:
+      - API: reference/api.md
+      - Contributing: reference/contributing.md

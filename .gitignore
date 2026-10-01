@@ -140,3 +140,6 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# mkdocs build output (the wiki is served, not built -- see docs/setup.md)
+site/

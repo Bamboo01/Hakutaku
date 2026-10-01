@@ -25,18 +25,23 @@ Roughly in dependency order, across three workstreams: the backend build
 
 ## 2. Auth / first-run admin
 
-`.env.example` used to document `HAKUTAKU_ADMIN_USER` and
-`HAKUTAKU_ADMIN_PASSWORD`. Nothing reads them, because none of it exists yet:
+**Done for admins.** Argon2id password hashing, cookie sessions with idle and
+absolute expiry, and owner-gated admin management all live in
+`server/AdminAuth.cs`. `HAKUTAKU_ADMIN_PASSWORD` is read by `SeedOwner` on the
+first start against an empty database.
 
-- [ ] No user entity — the only table is `Players` (see item 1 — the `User`
-      entity work and auth work overlap, decide together whether login lives on
-      that entity or a separate one)
-- [ ] No password hashing, no login endpoint, no sessions or tokens
-- [ ] No `[Authorize]` anywhere; `/api/players` is fully open to the internet
-
-This blocks deploying, not just cosmetically — right now anyone who finds the
-URL can read and write the player table. Decide explicitly whether auth is in
-scope for the MVP or deferred past it.
+- [x] Admin entity — `admin_users` and `admin_sessions` (no separate `User`
+      entity; see item 1, `Player` is the account)
+- [x] Password hashing (Argon2id at OWASP minimums), login/logout endpoints,
+      opaque session tokens stored only as SHA-256
+- [x] `/api/players`, `/api/characters` and `/api/events` guarded with
+      `.RequireAdmin()`; `/api/admin/admins` restricted to the owner
+- [ ] **Player-facing auth does not exist.** The three data endpoints above are
+      admin-gated as a *stopgap* — they are meant to be publicly reachable with
+      their own auth: player credentials for players, and a server key for game
+      servers. No `server_keys` schema exists. This is what blocks items 7 and 8.
+- [ ] Rename the data endpoints to singular (`/api/players` -> `/api/player`)
+      when they go public
 
 ---
 

@@ -1,258 +1,76 @@
 # Hakutaku
 
-ASP.NET Core API + Vue admin UI + Postgres, all in Docker.
+Backend for the **Fabled** plugin: a self-hosted service that does what PlayFab
+does — telemetry plus user, player and character data, over HTTP.
+
+ASP.NET Core 10 + PostgreSQL 18 + a Vue 3 admin UI, all in Docker, behind Caddy.
 
 **Status: early scaffold.** Three entities (`Player`, `Character`,
-`TelemetryEvent`) with `GET`/`POST` endpoints for each (see [API](#api)),
-guarded by admin login — there's no separate player-facing auth yet. The dev
-loop and the Docker build work, and `compose.yaml` runs a production stack
-behind Caddy with automatic HTTPS, redeployed by Jenkins on every merge to
-`master`. See [TODO.md](TODO.md) for what's missing.
+`TelemetryEvent`) with `GET`/`POST` endpoints, admin login, and a production
+stack on the DigiPen team43 VM that Jenkins redeploys on every merge to
+`master`. No player-facing auth yet, and no test suite.
 
-## Requirements
+## Documentation
 
-- Docker (Docker Desktop on Windows/macOS)
-- For development: the .NET 10 SDK and Node 22 or newer
+**The full wiki lives in [`docs/`](docs/).** Serve it with:
+
+```bash
+pip install -r requirements-docs.txt
+mkdocs serve        # http://localhost:5020
+```
+
+Or without installing Python:
+
+```bash
+docker run --rm -p 5020:5020 -v "${PWD}:/docs"   squidfunk/mkdocs-material serve --dev-addr 0.0.0.0:5020
+```
+
+Start at [`docs/index.md`](docs/index.md), or go straight to:
+
+| | |
+|---|---|
+| [Setup](docs/setup.md) | Install everything from scratch and run it |
+| [Project structure](docs/architecture/structure.md) | Layout, tech stack, why |
+| [API reference](docs/reference/api.md) | Every endpoint and error shape |
+| [Auth and sessions](docs/components/auth.md) | Hashing, cookies, expiry, roles |
+| [Deploy and CI/CD](docs/operations/deploy.md) | The VM, Jenkins, the SSH tunnel |
+| [Contributing](docs/reference/contributing.md) | Branches, migrations, house style |
+
+[TODO.md](TODO.md) is the roadmap.
 
 ## Quick start
+
+Requires Docker. For development, also the .NET 10 SDK and Node 22+.
 
 ```bash
 git clone https://github.com/Bamboo01/Hakutaku.git
 cd Hakutaku
+```
+
+**Everything in Docker:**
+
+```bash
 docker compose -f compose.dev.yaml up --build
 ```
 
-Open <http://localhost>.
+Open <http://localhost:8090>. Not port 80 — Caddy is default-deny and serves
+only `/Health`. See [Caddy](docs/components/caddy.md).
 
-Everything runs in containers: Caddy on :80 proxies to the API on :8080, which
-serves the built Vue UI out of `wwwroot`. Database credentials are hardcoded to
-`hakutaku`/`hakutaku` and there is no TLS, so keep this on your own machine.
-
-Compose waits for Postgres to be healthy before starting the API, but Caddy
-comes up immediately — so for a second or two after `up` you may get a **502**
-while the API finishes booting. Refresh; it clears on its own.
-
-## Developing
-
-Run only Postgres in a container so the app and UI hot-reload:
+**Dev loop, with hot reload:**
 
 ```bash
-docker compose -f compose.dev.yaml up -d postgres
-
-cd server && dotnet watch               # terminal 1, API on :5008
-cd web && npm install && npm run dev    # terminal 2, UI on :5173
+docker compose -f compose.dev.yaml up -d postgres   # terminal 1
+cd server && dotnet watch                           # terminal 2, API on :5008
+cd web && npm install && npm run dev                # terminal 3, UI on :5173
 ```
 
-Open <http://localhost:5173>. Vite proxies `/api` to the API, so CORS never
-comes up.
+Open <http://localhost:5173>.
 
-> **Already ran an older build of this repo?** The Postgres volume was created
-> with different credentials, and the API will fail to connect on startup.
-> Postgres only applies `POSTGRES_USER`/`POSTGRES_PASSWORD` when its data
-> directory is empty — changing them later does nothing. Reset with
-> `docker compose -f compose.dev.yaml down -v`, which deletes all local data.
+The first start seeds an owner account with username `admin`. Set
+`HAKUTAKU_ADMIN_PASSWORD` beforehand, or read the generated one out of the log —
+it is printed exactly once. Details in
+[Setup](docs/setup.md#your-first-login).
 
-### Migrations
-
-Migrations run automatically at startup — `Database.Migrate()` in
-`server/Program.cs:24`. To add one:
-
-```bash
-dotnet tool install --global dotnet-ef   # once
-cd server
-dotnet ef migrations add SomeChange
-```
-
-### Checking the production image still builds
-
-```bash
-docker compose -f compose.dev.yaml build
-```
-
-## Configuration
-
-The defaults work with no configuration. To change one, copy `.env.example` to
-`.env` next to `compose.dev.yaml` and uncomment the line you want; Compose picks
-it up automatically. (`.env` is read by Compose only — `dotnet watch` on the host
-reads `server/appsettings.Development.json`.)
-
-| Variable | Purpose |
-|---|---|
-| `DB_CONNECTION` | Full connection string the API uses. Defaults to the bundled Postgres; set it to point at an external database. |
-
-That is currently the *only* variable any code reads. Domain and admin-bootstrap
-settings are not implemented yet — see [TODO.md](TODO.md).
-
-## API
-
-Everything is JSON. Base URL: `http://localhost:5008` under `dotnet watch`,
-`http://localhost` with the full Docker stack, `https://51.79.242.169.nip.io` on
-the team VM.
-
-**Every endpoint below except `/Health` and admin login requires a logged-in
-admin session cookie** — there's no separate player-facing auth yet, so the
-player/character/event endpoints are locked behind admin login too, as a
-stopgap. `/api/admin/admins` is further restricted to the owner specifically.
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/Health` | Liveness check, returns `{"health":"ok"}` |
-| POST | `/api/admin/login` | Log in as an admin, sets a session cookie |
-| POST | `/api/admin/logout` | Revoke the current session and clear the cookie |
-| GET | `/api/admin/me` | Who the current session cookie belongs to |
-| POST | `/api/admin/admins` | Owner only: create a new admin |
-| DELETE | `/api/admin/admins/{id}` | Owner only: deactivate an admin |
-| GET | `/api/players` | List all players |
-| POST | `/api/players` | Create a player |
-| GET | `/api/characters` | List all characters |
-| POST | `/api/characters` | Create a character owned by a player |
-| GET | `/api/events` | List all telemetry events |
-| POST | `/api/events` | Record a telemetry event for a player |
-
-There is no `PUT` or `DELETE`, and the list endpoints return everything, with no
-paging or filtering.
-
-### Request bodies
-
-Ids are GUIDs generated by the server, so don't send `id`.
-
-| Endpoint | Fields |
-|---|---|
-| `POST /api/players` | `deviceId` (string), `xp` (integer) |
-| `POST /api/characters` | `playerId` (GUID of an existing player), `name` (string) |
-| `POST /api/events` | `playerId` (GUID of an existing player), `eventType` (string), `data` (string, holds the event payload as JSON text) |
-
-`timestamp` on an event is set by the server in UTC. Anything you send for it is
-overwritten. Responses echo the created object; character and event responses
-also include `"player": null`, which you can ignore.
-
-### Example
-
-These endpoints need a logged-in session cookie first (see Admin login below)
-— `-b cookies.txt` sends the cookie from that earlier login:
-
-```bash
-curl -b cookies.txt -X POST http://localhost:5008/api/players \
-  -H "Content-Type: application/json" \
-  -d '{"deviceId":"device-1","xp":0}'
-# {"id":"<player-id>","deviceId":"device-1","xp":0}
-
-curl -b cookies.txt -X POST http://localhost:5008/api/characters \
-  -H "Content-Type: application/json" \
-  -d '{"playerId":"<player-id>","name":"Hero"}'
-
-curl -b cookies.txt -X POST http://localhost:5008/api/events \
-  -H "Content-Type: application/json" \
-  -d '{"playerId":"<player-id>","eventType":"level_up","data":"{\"level\":2}"}'
-```
-
-### Admin login
-
-The first time the app starts with no admins, it creates an owner account with
-the username `admin`. Its password comes from `HAKUTAKU_ADMIN_PASSWORD`; if that
-is unset, the app generates one and prints it once in its log.
-
-Login is by **username**, not email — `username` is the unique login identifier
-(case-insensitive); `email` is optional account metadata (for future report
-hooks) and isn't used to log in.
-
-Login sets an `HttpOnly` session cookie rather than returning a token in the
-body — a browser handles it automatically, and curl needs a cookie jar (`-c`/`-b`):
-
-```bash
-curl -c cookies.txt -X POST http://localhost:5008/api/admin/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"<password>"}'
-# 204, Set-Cookie: hakutaku_admin_session=...
-
-curl -b cookies.txt http://localhost:5008/api/admin/me
-# {"username":"admin","email":null,"role":"owner"}
-
-curl -b cookies.txt -X POST http://localhost:5008/api/admin/logout
-# 204, clears the cookie
-```
-
-`GET /api/admin/me` is what a front end calls on load to find out whether the
-cookie it already has (if any) is still good, without asking for a password
-again — it returns `401` if there's no cookie, or the cookie's session has
-expired or been revoked, and `200 {username, email, role}` otherwise.
-
-Two separate expiries apply to a session, whichever comes first: an **idle
-timeout** of 30 minutes, pushed forward by every authenticated request (a
-forgotten tab dies on its own), and an **absolute lifetime** of 12 hours that
-no amount of activity extends (a stolen cookie can't be kept alive forever).
-Username matching ignores case. Login answers `401` with
-`{"error":"invalid credentials"}` for a wrong password, an unknown username or
-a disabled account alike, `400` if a field is missing, and `429` after 5
-attempts per minute from one IP. Logout and `/me` answer `401` for a missing,
-wrong, expired or already-revoked cookie.
-
-### Admin account management
-
-`POST /api/admin/admins` and `DELETE /api/admin/admins/{id}` require a valid
-session cookie belonging to the **owner** specifically — a regular admin gets
-`403 {"error":"owner only"}`. There's only ever one owner (the one seeded at
-first start); this endpoint can't create another.
-
-```bash
-curl -b cookies.txt -X POST http://localhost:5008/api/admin/admins \
-  -H "Content-Type: application/json" \
-  -d '{"username":"bob","password":"a-real-password"}'
-# 200 {"id":5,"username":"bob","role":"admin"}
-
-curl -b cookies.txt -X DELETE http://localhost:5008/api/admin/admins/5
-# 204
-```
-
-`401` if not logged in at all, `403 owner only` if logged in as a non-owner
-admin, `400` for a missing username or a password under 8 characters, `409` for
-a username already taken. Deleting is one-way (sets `disabled_at`, doesn't
-hard-delete — there's no restore endpoint, since it isn't needed) and also
-revokes that admin's active sessions immediately, so a deactivation takes
-effect right away rather than waiting for their cookie to expire on its own.
-The **owner account itself can never be deactivated** this way — `403` if you
-try, regardless of who's asking.
-
-### Errors
-
-Malformed JSON returns `400`. A `playerId` that doesn't match an existing player
-currently returns a bare `500` (a foreign-key violation), not a clean `4xx`.
-
-These shapes describe the early scaffold and will change as the schema develops.
-Player login and anything not listed above is not implemented yet — see
-[TODO.md](TODO.md).
-
-## Reaching the admin UI on the VM
-
-`compose.yaml` publishes the app on the VM's loopback only (`127.0.0.1:8090`),
-so it is not reachable from the internet. Host port 8090 rather than 8080
-because Jenkins already holds that one.
-
-Forward it over SSH, the same way you reach Jenkins:
-
-```bash
-ssh -L 8090:localhost:8090 team43@51.79.242.169
-```
-
-Then open <http://localhost:8090> and log in as usual. The session cookie is not
-marked `Secure` over the tunnel (it is plain HTTP inside the tunnel), which is
-fine because SSH already encrypts the hop.
-
-The tunnel is the *only* way in: `caddy/Caddyfile` is default-deny, serving
-`/Health` publicly and answering `404` for everything else, including the UI
-itself. Nothing on the public domain can reach the admin API or even tell that
-an admin panel exists.
-
-## Backups
-
-The dev database is named `hakutaku` and owned by `hakutaku`:
-
-```bash
-# back up
-docker compose -f compose.dev.yaml exec -T postgres \
-  pg_dump -U hakutaku hakutaku | gzip > backup-$(date +%F).sql.gz
-
-# restore
-gunzip -c backup-2026-09-16.sql.gz | \
-  docker compose -f compose.dev.yaml exec -T postgres psql -U hakutaku hakutaku
-```
+`compose.dev.yaml` is **local-only** (hardcoded credentials, no TLS) — never
+deploy it. Production is `compose.yaml`; see
+[Deploy](docs/operations/deploy.md).
