@@ -32,6 +32,11 @@ builder.Services.AddRateLimiter(o =>
     o.AddPolicy("admin-login", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
+    // Public and unauthenticated (see the registration endpoint below), so this is the
+    // only thing standing between it and someone hammering it to fill the table.
+    o.AddPolicy("player-register", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
 });
 
 // dotnet ef database update
@@ -53,6 +58,35 @@ app.UseRateLimiter();
 // NOTE: do not map "/" to an endpoint. Static-file middleware skips any request
 // that already matched an endpoint, so a route here shadows the Vue UI below.
 app.MapGet("/Health", () => Results.Ok( new { health = "ok" } ));
+// Public, find-or-create by device ID. This is intentionally the *only* public
+// game-data endpoint -- caddy/Caddyfile has a handle block for it specifically.
+// No session/token is issued; that's a separate, bigger piece (see TODO.md item 5)
+// closer to the TDD's player_identities/player_sessions design. For now this is
+// just "does a player for this device exist yet," which is what was asked for.
+app.MapPost("/api/players/register", async (server.Models.Db db, PlayerRegisterRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request.DeviceId) || request.DeviceId.Length > 254)
+        return Results.BadRequest(new { error = "deviceId is required" });
+
+    var deviceId = request.DeviceId.Trim();
+    var existing = await db.Players.FirstOrDefaultAsync(p => p.DeviceId == deviceId);
+    if (existing is not null) return Results.Ok(existing);
+
+    var player = new server.Models.Player { DeviceId = deviceId, Xp = 0 };
+    db.Players.Add(player);
+    try
+    {
+        await db.SaveChangesAsync();
+    }
+    catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" })
+    {
+        // Lost a race with another registration for the same device between the
+        // lookup above and this save -- fetch whichever row actually won.
+        return Results.Ok(await db.Players.FirstAsync(p => p.DeviceId == deviceId));
+    }
+    return Results.Ok(player);
+}).RequireRateLimiting("player-register");
+
 // Admin-or-owner only for now -- there's no separate player-facing auth yet,
 // so this is the only thing standing between these endpoints and the public
 // internet. See TODO.md for the planned player login.
@@ -93,3 +127,5 @@ app.UseStaticFiles();
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+record PlayerRegisterRequest(string? DeviceId);

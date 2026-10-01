@@ -36,10 +36,17 @@ first start against an empty database.
       opaque session tokens stored only as SHA-256
 - [x] `/api/players`, `/api/characters` and `/api/events` guarded with
       `.RequireAdmin()`; `/api/admin/admins` restricted to the owner
-- [ ] **Player-facing auth does not exist.** The three data endpoints above are
-      admin-gated as a *stopgap* — they are meant to be publicly reachable with
-      their own auth: player credentials for players, and a server key for game
-      servers. No `server_keys` schema exists. This is what blocks items 7 and 8.
+- [x] `POST /api/players/register` — public, rate-limited, find-or-create a
+      player by `deviceId` (unique index at the DB level, so a race can't
+      create duplicates). Caddy has a dedicated `handle` block for it. No
+      session is issued; this only proves a device exists as a player.
+- [ ] **A real player session doesn't exist yet.** Registering doesn't log you
+      in to anything — there's no player token/cookie, and the rest of
+      `/api/players` plus all of `/api/characters` and `/api/events` are still
+      admin-gated. The TDD's full design (`player_identities` for
+      email/Steam linking, `player_sessions`, `player_bans`) is a separate,
+      bigger milestone past this. No `server_keys` schema exists either. This
+      is what blocks items 7 and 8.
 - [ ] Rename the data endpoints to singular (`/api/players` -> `/api/player`)
       when they go public
 

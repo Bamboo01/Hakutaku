@@ -1,19 +1,16 @@
 {$HAKUTAKU_DOMAIN} {
 
-	# The API is tunnel-only
-	# Nothing under /api has a public access point yet!!
-	# The current endpoints are all admin-gated, and a session cookie can only be minted
-	# through when logging in through SSH tunnel (see the readme). 
-	# 404 rather than 403 so this doesn't confirm the routes exist.
-	# Narrow this to /api/admin/* once players and game servers need public access.
-	# handle /api/* {
-	#	respond 404
-	#}
-
-	# Default-deny: only what's named here is public. The admin UI and its API
-	# live behind the SSH tunnel (see the readme), which bypasses Caddy entirely.
-	# Add a handle block per public route when players and game servers land.
+	# Default-deny: only what's named here is public. The admin UI and the rest
+	# of /api live behind the SSH tunnel (see the readme), which bypasses Caddy
+	# entirely. Add a handle block per public route as more of them land.
 	handle /Health {
+		reverse_proxy app:8080
+	}
+
+	# The one public game-data route: public, unauthenticated, rate-limited on
+	# the app side. Everything else under /api stays tunnel-only until real
+	# player/server auth exists (see TODO.md item 5).
+	handle /api/players/register {
 		reverse_proxy app:8080
 	}
 

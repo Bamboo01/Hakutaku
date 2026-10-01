@@ -48,6 +48,10 @@ namespace server.Models
         // Admin tables follow the TDD conventions (bigint identity keys, snake_case names).
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // One player per device: lets registration be a safe find-or-create even
+            // under a race (two near-simultaneous registrations for a brand-new device).
+            modelBuilder.Entity<Player>(e => e.HasIndex(x => x.DeviceId).IsUnique());
+
             modelBuilder.Entity<AdminUser>(e =>
             {
                 e.ToTable("admin_users", t => t.HasCheckConstraint("ck_admin_users_role", "role IN (0, 1)"));
