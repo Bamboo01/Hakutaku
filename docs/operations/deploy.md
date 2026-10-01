@@ -118,6 +118,25 @@ ssh -L 8081:localhost:8080 team43@51.79.242.169
 Then **<http://localhost:8081>**. (This is also why the app uses host port
 **8090**: 8080 was taken.)
 
+### Reaching the wiki
+
+No tunnel needed — the wiki is deliberately public:
+
+**<https://docs.51.79.242.169.nip.io>**
+
+Caddy proxies that subdomain to the `docs` container, which runs `mkdocs serve`
+against the repo checked out on the VM. So a merge to `master` updates the wiki
+along with everything else.
+
+The hostname needs no DNS record and no `.env` entry: `compose.yaml` derives it
+as `docs.${HAKUTAKU_DOMAIN}`, and [nip.io](https://nip.io) resolves any prefix
+to the embedded IP.
+
+!!! note "It gets its own certificate"
+    A separate site means a separate Let's Encrypt certificate — and therefore a
+    separate rate-limit bucket, so certificate trouble on one domain cannot
+    affect the other. Expect one extra ACME request the first time this deploys.
+
 ## Deploying by hand
 
 Only when Jenkins is broken or you are testing something it does not do:
@@ -225,6 +244,10 @@ Things that will trip you up, collected from doing it once:
 
 - **No automated backups.** Take a `pg_dump` by hand before anything
   schema-shaped — see [Database](../components/database.md#backups).
+- **The wiki runs on a dev server.** `mkdocs serve` is single-threaded and
+  meant for local use. It is fine for a handful of readers behind Caddy's TLS;
+  it is not a production web server. Swapping to `mkdocs build` plus Caddy's
+  `file_server` is the upgrade if it ever matters.
 - **No rollback step.** Recovery is a revert commit plus another deploy.
 - **Migrations run on app startup**, so a bad migration takes the app down
   rather than failing a deploy stage.

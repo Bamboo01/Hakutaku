@@ -8,6 +8,11 @@ HTTP.
 If you have just been handed this repo, read [Setup](setup.md) first, get it
 running, then come back here and pick a page.
 
+!!! tip "This wiki is hosted"
+    Live at **<https://docs.51.79.242.169.nip.io>**, served from `master` — no
+    tunnel and no local setup needed to read it. To run it locally with live
+    reload, see [Mode C](setup.md#mode-c-docs).
+
 ## What it actually is right now
 
 Three things in Docker containers:

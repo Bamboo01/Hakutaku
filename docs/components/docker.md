@@ -80,10 +80,11 @@ Stage 2 does `COPY . .`, so without this the build context would include
 |---|---|---|
 | Postgres password | `${POSTGRES_PASSWORD}` from `.env`, required | `hakutaku`, hardcoded |
 | `HAKUTAKU_DOMAIN` | Real domain → automatic HTTPS | `:80` → plain HTTP |
-| Caddy ports | `80:80` and `443:443` | `80:80` |
+| Caddy ports | `80:80` and `443:443` | `80:80` and `5020:5020` |
 | Postgres ports | **none** | `127.0.0.1:5432:5432` |
 | App ports | `127.0.0.1:8090:8080` | `127.0.0.1:8090:8080` |
 | `HAKUTAKU_ADMIN_PASSWORD` | Forwarded to the app | **Not forwarded** |
+| `HAKUTAKU_DOCS_DOMAIN` | `docs.${HAKUTAKU_DOMAIN}` → its own certificate | `:5020` → plain HTTP |
 | Volumes | `pgdata`, `caddy_data`, `caddy_config` | `pgdata` |
 
 ### Services
@@ -139,6 +140,32 @@ from other containers on the compose network.
 **`caddy`** — see [Caddy](caddy.md). The one thing to carry over: it mounts
 `./caddy` as a **directory**, not the single file, because a single-file bind
 mount pins the inode and git replaces files rather than editing them.
+
+**`docs`** — this wiki, live-served by `mkdocs serve` inside the official
+Material image:
+
+```yaml
+docs:
+  image: squidfunk/mkdocs-material
+  command: serve --dev-addr 0.0.0.0:5020
+  volumes:
+    - ./:/docs:ro
+```
+
+Note what is *not* there: **no `ports:` entry.** The container is reachable only
+through Caddy, which proxies the `docs.` subdomain to it. Nothing is published
+on the host.
+
+It mounts the **whole repo**, read-only, for the same inode reason as the
+Caddyfile — `mkdocs.yml` sits at the repo root, and a single-file bind mount
+would pin it so edits never appeared. The cost is that `.env` is visible inside
+that container; the dev server only ever serves generated documentation, never
+arbitrary files, so nothing is exposed over HTTP by it.
+
+!!! note "The docs are served, not built"
+    There is no `mkdocs build` step and no `site/` directory in the image. A push
+    to `master` redeploys, the container restarts, and the wiki reflects the new
+    `docs/` immediately.
 
 ### Volumes
 

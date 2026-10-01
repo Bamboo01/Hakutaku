@@ -44,6 +44,9 @@ services:
       - "443:443"
     environment:
       HAKUTAKU_DOMAIN: ${HAKUTAKU_DOMAIN}
+      # Derived, so no new .env entry is needed. nip.io resolves any
+      # prefix, so docs.<ip>.nip.io already points at this host.
+      HAKUTAKU_DOCS_DOMAIN: docs.${HAKUTAKU_DOMAIN}
     volumes:
       # Mount the directory, not the file: a single-file bind mount pins the
       # inode, and git replaces files rather than editing them, so the container
@@ -53,6 +56,19 @@ services:
       - caddy_config:/config
     depends_on:
       - app
+      - docs
+
+  docs:
+    # The wiki in docs/, live-served rather than built. Reachable only through
+    # caddy -- no `ports:` here, so it is not published on the host.
+    image: squidfunk/mkdocs-material
+    restart: unless-stopped
+    command: serve --dev-addr 0.0.0.0:5020
+    volumes:
+      # The whole repo, read-only: mkdocs.yml sits at the root, and a
+      # single-file bind mount would pin its inode so edits never appear
+      # (same trap as the Caddyfile mount above).
+      - ./:/docs:ro
 
 volumes:
   pgdata:

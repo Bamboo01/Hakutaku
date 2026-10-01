@@ -328,6 +328,16 @@ From the repo root:
 Open **<http://localhost:5020>**. Edit any file under `docs/` and the browser
 reloads itself.
 
+!!! tip "The Docker stack serves it too"
+    Both compose files include a `docs` service, so
+    `docker compose -f compose.dev.yaml up` already puts the wiki on
+    <http://localhost:5020> through Caddy. Running `mkdocs serve` yourself is
+    for when you want live reload without the rest of the stack — and the two
+    will fight over port 5020, so run one or the other.
+
+    In production the same service is published at
+    <https://docs.51.79.242.169.nip.io>.
+
 The port and bind address come from `dev_addr: 0.0.0.0:5020` in `mkdocs.yml`.
 `0.0.0.0` means **anyone who can reach your machine on the network can read the
 docs** — intentional, so you can hand a teammate a link.

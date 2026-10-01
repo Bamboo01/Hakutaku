@@ -21,3 +21,12 @@
 		respond 404
 	}
 }
+
+# The wiki (docs/), served by the `docs` container. A separate site rather than
+# a /docs path on the main domain: a subpath needs site_url set and breaks
+# mkdocs' live-reload websocket. Caddy issues this its own certificate, which
+# draws on a separate Let's Encrypt rate-limit bucket from the main domain.
+# This is deliberately public -- it is the team's onboarding wiki.
+{$HAKUTAKU_DOCS_DOMAIN} {
+	reverse_proxy docs:5020
+}

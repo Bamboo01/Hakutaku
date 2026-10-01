@@ -42,10 +42,19 @@ Two things follow from this, and both are intentional:
 | `/api/players`, `/api/characters`, `/api/events` | No | SSH tunnel only, *and* admin-gated |
 | Postgres | No | Docker network only |
 | Jenkins | No | SSH tunnel on a separate port |
-| This wiki | Whoever can reach the host on `:5020` | `mkdocs serve` binds `0.0.0.0` |
+| **This wiki** | **Yes** | `https://docs.51.79.242.169.nip.io` |
 
-`/Health` is public for exactly one reason: the Jenkins smoke test curls it over
-HTTPS after every deploy.
+So there are exactly **two** public surfaces, and each has a stated reason:
+
+- **`/Health`** — the Jenkins smoke test curls it over HTTPS after every deploy.
+- **The wiki** — onboarding is useless if reading it requires an SSH tunnel.
+
+!!! warning "The wiki describes the system's internals"
+    Internal ports, the tunnel, the deploy mechanism, and the fact that
+    `/Health` is the only public API route. That is a deliberate trade: the team
+    can read it without setup. If it stops being an acceptable trade, Caddy
+    `basic_auth` on the docs site block is the whole fix — see
+    [Caddy](../components/caddy.md#the-docs-subdomain).
 
 ## The game-data endpoints are a stopgap
 

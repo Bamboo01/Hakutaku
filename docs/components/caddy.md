@@ -53,9 +53,19 @@ Two things are bought with that hop:
 		respond 404
 	}
 }
+
+# The wiki (docs/), served by the `docs` container. A separate site rather than
+# a /docs path on the main domain: a subpath needs site_url set and breaks
+# mkdocs' live-reload websocket. Caddy issues this its own certificate, which
+# draws on a separate Let's Encrypt rate-limit bucket from the main domain.
+# This is deliberately public -- it is the team's onboarding wiki.
+{$HAKUTAKU_DOCS_DOMAIN} {
+	reverse_proxy docs:5020
+}
 ```
 
-That is the entire public surface of the project: **one route**.
+That is the entire public surface of the project: **one route on the main
+domain, plus the wiki on its own subdomain**.
 
 !!! info "The commented-out block is a kept placeholder"
     It is not dead code someone forgot. It is the shape of the rule that will be
@@ -90,6 +100,46 @@ certificates for domain names — not for ports, `localhost`, or bare IPs.
 
 **`handle { respond 404 }`** — the catch-all. No matcher means it matches
 everything.
+
+### The docs subdomain
+
+The second site block serves this wiki from the `docs` container:
+
+```caddyfile
+{$HAKUTAKU_DOCS_DOMAIN} {
+	reverse_proxy docs:5020
+}
+```
+
+It is a **separate site**, not a `/docs` path on the main domain, and that is
+worth understanding:
+
+| | |
+|---|---|
+| A subpath would need `site_url` set | MkDocs generates absolute asset links without it |
+| A subpath breaks live reload | The dev server's websocket does not survive prefix stripping |
+| A separate site gets its own certificate | Which draws on its own Let's Encrypt rate-limit bucket |
+| No new port is opened | It rides `:443`, already public |
+
+The hostname is derived in `compose.yaml` rather than stored in `.env`:
+
+```yaml
+HAKUTAKU_DOCS_DOMAIN: docs.${HAKUTAKU_DOMAIN}
+```
+
+[nip.io](https://nip.io) resolves **any** prefix to the embedded IP, so
+`docs.51.79.242.169.nip.io` already points at the VM with no DNS record to
+create. Nothing on the VM's `.env` needs changing.
+
+!!! info "This one is public on purpose"
+    Unlike everything else outside `/Health`, the wiki is meant to be readable
+    by the team without a tunnel. It does describe the system's internals, so if
+    that stops being acceptable, the smallest fix is Caddy `basic_auth` on this
+    block — it does not require touching anything else.
+
+Locally the same block is reached over plain HTTP, because `compose.dev.yaml`
+sets `HAKUTAKU_DOCS_DOMAIN: ":5020"` and publishes that port. A bare port can
+never get a certificate, which is the same reason the main site is `:80` in dev.
 
 ### Why `handle` and not `respond` on its own
 

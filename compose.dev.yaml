@@ -49,9 +49,14 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      # The wiki, to match the documented port. Caddy serves it here
+      # because the Caddyfile is shared with compose.yaml.
+      - "5020:5020"
     environment:
       # Caddyfile is shared with compose.yaml; locally, plain HTTP on :80.
       HAKUTAKU_DOMAIN: ":80"
+      # Plain HTTP on :5020 -- a bare port can never get a certificate.
+      HAKUTAKU_DOCS_DOMAIN: ":5020"
     volumes:
       # Mount the directory, not the file: a single-file bind mount pins the
       # inode, and git replaces files rather than editing them, so the container
@@ -59,6 +64,19 @@ services:
       - ./caddy:/etc/caddy:ro
     depends_on:
       - app
+      - docs
+
+  docs:
+    # The wiki in docs/, live-served rather than built. Reachable only through
+    # caddy -- no `ports:` here, so it is not published on the host.
+    image: squidfunk/mkdocs-material
+    restart: unless-stopped
+    command: serve --dev-addr 0.0.0.0:5020
+    volumes:
+      # The whole repo, read-only: mkdocs.yml sits at the root, and a
+      # single-file bind mount would pin its inode so edits never appear
+      # (same trap as the Caddyfile mount above).
+      - ./:/docs:ro
 
 volumes:
   pgdata:
