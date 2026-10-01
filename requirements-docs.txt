@@ -1,0 +1,8 @@
+# Docs toolchain only -- nothing the app itself needs.
+#   python -m pip install --user -r requirements-docs.txt
+#   mkdocs serve
+# Or skip Python entirely and use the Docker one-liner in docs/setup.md.
+mkdocs-material>=9.5
+# MkDocs 2.0 removes the plugin and theming system with no migration path,
+# so stay on 1.x until Material supports it.
+mkdocs<2
