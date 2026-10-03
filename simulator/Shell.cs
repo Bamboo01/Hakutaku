@@ -12,7 +12,7 @@ namespace simulator
         const string HelpText = """
               new [display name]              register a new guest (new pretend hardware) and switch to it; prints its device token
               device <deviceToken>            log in with a device token you already have, as a new mock player
-              login <email> <password>        sign in by email as a new mock player, like a second device, and switch to it
+              login <email> <password>        sign in by (verified) email as a new mock player, like a second device, and switch to it
               players                         list the mock players made in this session
               use <n>                         switch to mock player n
 

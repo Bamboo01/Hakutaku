@@ -428,6 +428,9 @@ namespace server
             // Same answer for an unknown email and a wrong password, and an unknown email
             // still pays for a hash check, so neither the body nor the timing reveals
             // which emails exist -- the same rules as admin login.
+            // An email only becomes a way in once it is verified: until then the player is
+            // still a guest on their device token. That check comes after the password, so
+            // only someone who knows the password learns the email is unverified.
             app.MapPost("/api/players/login/email", async (Db db, PlayerEmailRequest request) =>
             {
                 var email = NormalizeEmail(request.Email);
@@ -441,6 +444,8 @@ namespace server
                 var passwordOk = AdminAuth.VerifyPassword(identity?.PwHash ?? AdminAuth.DummyHash, request.Password);
                 if (identity is null || !passwordOk)
                     return Results.Json(new { error = "invalid credentials" }, statusCode: StatusCodes.Status401Unauthorized);
+                if (identity.VerifiedAt is null)
+                    return Results.Json(new { error = "this email isn't verified yet; enter the code mailed to it first" }, statusCode: StatusCodes.Status403Forbidden);
 
                 var (token, expiresAt) = await IssueSession(db, identity.PlayerId);
                 return Results.Ok(new { id = identity.PlayerId, displayName = identity.Player.DisplayName, xp = identity.Player.Xp, token, expiresAt });

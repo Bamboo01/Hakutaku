@@ -28,7 +28,9 @@ namespace Hakutaku.ClientModels
         public string? DeviceToken;
     }
 
-    // POST /api/players/login/email. Needs an email linked with LinkEmailAddress first.
+    // POST /api/players/login/email. Needs an email linked with LinkEmailAddress and then
+    // verified with VerifyEmail: an unverified one fails with NotAuthorized (403), while a
+    // wrong password or unknown email fails with NotAuthenticated (401).
     public class LoginWithEmailAddressRequest
     {
         public string? Email;

@@ -8,6 +8,7 @@ namespace simulator
         Ok,
         BadRequest,
         Unauthorized,
+        Forbidden,
         Conflict,
         // 401 or 403, which is what the admin gate answers locally or through the tunnel.
         // Against any other host 404 counts too, since that's Caddy's answer on the public
@@ -160,16 +161,13 @@ namespace simulator
             var verify = await RetryIfLimited(() => c.VerifyEmailAsync(new VerifyEmailRequest { Code = "000000" }));
             report.Check(player.Name, "VerifyEmail (wrong code)", Expect.BadRequest, verify.Error);
 
+            // An email isn't a way in until it's verified, even with the right password.
+            // Logging in for real needs the mailed code, so the shell covers that half.
             var login = await RetryIfLimited(() => c.LoginWithEmailAddressAsync(new LoginWithEmailAddressRequest { Email = player.Email, Password = player.Password }));
-            report.Check(player.Name, "LoginWithEmailAddress", Expect.Ok, login.Error);
-            if (login.Result != null)
-            {
-                report.Assert(player.Name, "  ...is the same player as the device", login.Result.PlayerId == playerId, login.Result.PlayerId);
-                report.Assert(player.Name, "  ...with the current display name", login.Result.DisplayName == player.DisplayName, login.Result.DisplayName);
-            }
+            report.Check(player.Name, "LoginWithEmailAddress (unverified email)", Expect.Forbidden, login.Error);
 
             var wrongPassword = await RetryIfLimited(() => stranger.LoginWithEmailAddressAsync(new LoginWithEmailAddressRequest { Email = player.Email, Password = "not-the-password" }));
-            report.Check("stranger", "LoginWithEmailAddress (wrong password)", Expect.Unauthorized, wrongPassword.Error);
+            report.Check("stranger", "LoginWithEmailAddress (unverified, wrong password)", Expect.Unauthorized, wrongPassword.Error);
 
             var unknown = await RetryIfLimited(() => stranger.LoginWithEmailAddressAsync(new LoginWithEmailAddressRequest { Email = MockPlayer.NewEmail(), Password = "not-the-password" }));
             report.Check("stranger", "LoginWithEmailAddress (unknown email)", Expect.Unauthorized, unknown.Error);
