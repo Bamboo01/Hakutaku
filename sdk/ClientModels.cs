@@ -8,21 +8,27 @@ using System.Collections.Generic;
 // has no fields, also like PlayFab, so fields can be added later without breaking callers.
 namespace Hakutaku.ClientModels
 {
-    // POST /api/players/register. Find-or-create: an unknown device ID makes a new player,
-    // a known one logs that player in. Unlike PlayFab's LoginWithCustomID there is no
-    // CreateAccount flag, because the server always creates.
-    public class LoginWithDeviceIDRequest
+    // POST /api/players/register. Makes a new guest player every time, and the result's
+    // DeviceToken is that guest's credential: store it, and sign in with
+    // LoginWithDeviceToken on later launches.
+    public class RegisterGuestRequest
     {
-        // Made by the game and kept on the device. Whoever holds it is that player, so
-        // treat it like a password: don't log it or show it.
-        public string? DeviceId;
-        // Optional, and only used if this call creates the player. A known device keeps the
-        // name it has (LoginResult.DisplayName says which); UpdateUserTitleDisplayName
-        // changes it. 3-25 characters, and not unique.
+        // An identifier of the hardware, such as Unity's SystemInfo.deviceUniqueIdentifier.
+        // Required, but recorded only for support and abuse tracking: it isn't secret, so
+        // the server never signs anyone in with it. 1-254 characters.
+        public string? HardwareId;
+        // Optional: 3-25 characters, and not unique. UpdateUserTitleDisplayName changes it.
         public string? DisplayName;
     }
 
-    // POST /api/players/login. Needs an email linked with LinkEmailAddress first.
+    // POST /api/players/login/device. Never creates a player: an unknown token fails with
+    // NotAuthenticated, and the game should offer "new game" or "I have an account".
+    public class LoginWithDeviceTokenRequest
+    {
+        public string? DeviceToken;
+    }
+
+    // POST /api/players/login/email. Needs an email linked with LinkEmailAddress first.
     public class LoginWithEmailAddressRequest
     {
         public string? Email;
@@ -37,6 +43,9 @@ namespace Hakutaku.ClientModels
         public string SessionTicket = "";
         public DateTime SessionExpiration;
         public int Xp;
+        // Only from RegisterGuest, and only that once: the server keeps just its hash. Store
+        // it like a password, e.g. in the iOS Keychain or Android Keystore.
+        public string? DeviceToken;
     }
 
     // POST /api/players/display-name. Sets or replaces the name the game shows for this
@@ -54,8 +63,8 @@ namespace Hakutaku.ClientModels
     }
 
     // POST /api/players/link/email, PlayFab's AddUsernamePassword. Adds an email and
-    // password next to the device ID; it never replaces it. The server mails a 6-digit
-    // code to prove the address, which VerifyEmail redeems.
+    // password to a guest. The server mails a 6-digit code to prove the address, which
+    // VerifyEmail redeems; the device token keeps working until then.
     public class LinkEmailAddressRequest
     {
         public string? Email;
@@ -80,6 +89,10 @@ namespace Hakutaku.ClientModels
     public class VerifyEmailResult
     {
         public bool Verified;
+        // True when verifying deleted the player's device token on the server. Delete the
+        // stored copy too; from now on the player signs in by email. The current session
+        // keeps working.
+        public bool DeviceTokenRemoved;
     }
 
     // POST /api/players/email/resend. At most one code a minute per player.

@@ -48,19 +48,22 @@ namespace simulator
             var players = new List<MockPlayer>();
             for (var i = 1; i <= playerCount; i++)
             {
-                var player = new MockPlayer($"player-{i}", url) { DeviceId = MockPlayer.NewDeviceId() };
+                var player = new MockPlayer($"player-{i}", url);
                 var wanted = $"Sim {player.Name}";
-                var login = await RetryIfLimited(() => player.Client.LoginWithDeviceIDAsync(new LoginWithDeviceIDRequest { DeviceId = player.DeviceId, DisplayName = wanted }));
+                var login = await RetryIfLimited(() => player.Client.RegisterGuestAsync(new RegisterGuestRequest { HardwareId = player.HardwareId, DisplayName = wanted }));
                 if (login.Error?.Error == HakutakuErrorCode.ConnectionError)
                 {
                     Report.Problem($"Can't reach {url}: {login.Error.ErrorMessage}. Is the server running?");
                     return 1;
                 }
-                report.Check(player.Name, "LoginWithDeviceID (new device, named)", Expect.Ok, login.Error, login.Result?.PlayerId);
+                report.Check(player.Name, "RegisterGuest (named)", Expect.Ok, login.Error, login.Result?.PlayerId);
                 if (login.Result == null) continue;
 
                 report.Assert(player.Name, "  ...has the display name it asked for", login.Result.DisplayName == wanted, login.Result.DisplayName);
+                report.Assert(player.Name, "  ...and a device token to keep", !string.IsNullOrEmpty(login.Result.DeviceToken),
+                    $"{login.Result.DeviceToken?.Length ?? 0} characters");
                 player.DisplayName = login.Result.DisplayName;
+                player.DeviceToken = login.Result.DeviceToken;
                 players.Add(player);
             }
 
@@ -82,17 +85,32 @@ namespace simulator
         {
             var c = player.Client;
             var playerId = player.PlayerId;
+            // Someone who isn't logged in as anybody.
+            var stranger = new HakutakuClientInstanceAPI(new HakutakuApiSettings { ServerUrl = url });
 
-            // Find-or-create: the same device again must be the same player, with a new
-            // session. A display name only counts when the call creates the player, so the
-            // different one sent here must be ignored.
-            var again = await RetryIfLimited(() => c.LoginWithDeviceIDAsync(new LoginWithDeviceIDRequest { DeviceId = player.DeviceId, DisplayName = "Not My Name" }));
-            report.Check(player.Name, "LoginWithDeviceID (same device again)", Expect.Ok, again.Error);
+            // The device token signs the same player back in, with a new session.
+            var again = await RetryIfLimited(() => c.LoginWithDeviceTokenAsync(new LoginWithDeviceTokenRequest { DeviceToken = player.DeviceToken }));
+            report.Check(player.Name, "LoginWithDeviceToken", Expect.Ok, again.Error);
             if (again.Result != null)
             {
                 report.Assert(player.Name, "  ...is the same player", again.Result.PlayerId == playerId, again.Result.PlayerId);
-                report.Assert(player.Name, "  ...keeps its display name", again.Result.DisplayName == player.DisplayName, again.Result.DisplayName);
+                report.Assert(player.Name, "  ...with its display name", again.Result.DisplayName == player.DisplayName, again.Result.DisplayName);
             }
+
+            var unknownToken = await RetryIfLimited(() => stranger.LoginWithDeviceTokenAsync(new LoginWithDeviceTokenRequest { DeviceToken = "made-up-device-token" }));
+            report.Check("stranger", "LoginWithDeviceToken (made-up token)", Expect.Unauthorized, unknownToken.Error);
+
+            // The hardware ID is only recorded, so registering the same hardware again makes a
+            // new player rather than handing out this one.
+            var sameHardware = new HakutakuClientInstanceAPI(new HakutakuApiSettings { ServerUrl = url });
+            var twin = await RetryIfLimited(() => sameHardware.RegisterGuestAsync(new RegisterGuestRequest { HardwareId = player.HardwareId }));
+            report.Check(player.Name, "RegisterGuest (same hardware ID again)", Expect.Ok, twin.Error);
+            if (twin.Result != null)
+                report.Assert(player.Name, "  ...is a different player", twin.Result.PlayerId != playerId, twin.Result.PlayerId);
+
+            // What a client from before device tokens sends: a deviceId and no hardwareId.
+            var oldClient = await RetryIfLimited(() => stranger.SendRawRequestAsync("POST", "/api/players/register", """{"deviceId":"old-client-device-id"}"""));
+            report.Check("stranger", "raw POST /api/players/register (old deviceId body)", Expect.BadRequest, oldClient.Error);
 
             // Stored trimmed. Not rate limited, so these cost nothing against the limits.
             const string newName = "Sir Simulator";
@@ -131,6 +149,12 @@ namespace simulator
                 report.Check(other.Name, $"LinkEmailAddress ({player.Name}'s email)", Expect.Conflict, taken.Error);
             }
 
+            // The device token is removed when the email is verified, not when it is linked,
+            // so a mistyped address can't strand a guest. Verifying for real needs the mailed
+            // code, so that half is checked by hand in the shell.
+            var stillWorks = await RetryIfLimited(() => c.LoginWithDeviceTokenAsync(new LoginWithDeviceTokenRequest { DeviceToken = player.DeviceToken }));
+            report.Check(player.Name, "LoginWithDeviceToken (email linked, unverified)", Expect.Ok, stillWorks.Error);
+
             // The real code is only mailed (or, with no SMTP, logged by the server), so the
             // probe can only check that a wrong one is refused. Use the shell for the real one.
             var verify = await RetryIfLimited(() => c.VerifyEmailAsync(new VerifyEmailRequest { Code = "000000" }));
@@ -143,9 +167,6 @@ namespace simulator
                 report.Assert(player.Name, "  ...is the same player as the device", login.Result.PlayerId == playerId, login.Result.PlayerId);
                 report.Assert(player.Name, "  ...with the current display name", login.Result.DisplayName == player.DisplayName, login.Result.DisplayName);
             }
-
-            // Someone who isn't logged in as anybody.
-            var stranger = new HakutakuClientInstanceAPI(new HakutakuApiSettings { ServerUrl = url });
 
             var wrongPassword = await RetryIfLimited(() => stranger.LoginWithEmailAddressAsync(new LoginWithEmailAddressRequest { Email = player.Email, Password = "not-the-password" }));
             report.Check("stranger", "LoginWithEmailAddress (wrong password)", Expect.Unauthorized, wrongPassword.Error);
@@ -180,7 +201,7 @@ namespace simulator
                 report.Check(player.Name, label, expect, await call(player.Client));
         }
 
-        // register, login and the four mail routes each allow 5 calls a minute per IP, and
+        // register, both logins and the four mail routes each allow 5 calls a minute per IP, and
         // the server sends no Retry-After, so a 429 waits and tries again instead of failing
         // the run. A rejected call doesn't use up the limit, so polling every 10 s is fine.
         static async Task<HakutakuResult<T>> RetryIfLimited<T>(Func<Task<HakutakuResult<T>>> call) where T : class

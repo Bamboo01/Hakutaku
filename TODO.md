@@ -37,11 +37,23 @@ first start against an empty database.
 - [x] `/api/players`, `/api/characters` and `/api/events` guarded with
       `.RequireAdmin()`; `/api/admin/admins` restricted to the owner
 - [x] Player auth (`server/PlayerAuth.cs`): `player_identities` (device /
-      email, steam reserved) and `player_sessions` tables, `POST
-      /api/players/register` (find-or-create by device ID, returns a Bearer
-      token), `POST /api/players/link/email` (adds email + password to the
-      current player) and `POST /api/players/login`. Public routes are
-      rate-limited and have their own Caddy `handle` blocks.
+      email, steam reserved) and `player_sessions` tables. `POST
+      /api/players/register` makes a guest and returns a server-minted device
+      token once (stored only as SHA-256; the request's `hardwareId` is just
+      recorded), `POST /api/players/login/device` signs in with it and never
+      creates, `POST /api/players/link/email` adds email + password, and `POST
+      /api/players/login/email` signs in by email. Verifying the email deletes
+      the device token. Public routes are rate-limited and have their own Caddy
+      `handle` blocks.
+- [x] Optional, non-unique display names (`POST /api/players/display-name`)
+- [ ] **Refresh tokens.** A verified player has no device token, so once the
+      30-day session expires they must type their password again. A long-lived,
+      rotating, revocable refresh token per install fixes that, and is also the
+      place for a one-active-device policy
+- [ ] Rate limits are per IP only. Mobile carriers put many players behind one
+      IP (CGNAT), so at scale these need keying by device or account as well
+- [ ] Platform sign-in (Sign in with Apple, Google, Steam) as more identity
+      providers; Steam is already reserved in `PlayerProvider`
 - [x] Email verification (6-digit code, 15 min, 5 guesses) and password reset by
       emailed code, via `IEmailSender` (`server/EmailSender.cs`; SMTP through
       MailKit, or logged to the console when `SMTP_HOST` is unset)

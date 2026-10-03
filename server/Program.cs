@@ -48,6 +48,11 @@ builder.Services.AddRateLimiter(o =>
     o.AddPolicy("player-login", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
+    // Device login (login/device). A device token can't be guessed, so this only caps
+    // load; its own policy so a guest's every-launch login doesn't use up email login's.
+    o.AddPolicy("player-device-login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
     // The mail routes (verify, resend, forgot, reset). Each one either sends an email or
     // lets someone guess a code, so they share one per-IP limit, apart from login's.
     o.AddPolicy("player-mail", context => RateLimitPartition.GetFixedWindowLimiter(
@@ -80,8 +85,8 @@ app.MapPlayerEndpoints();
 
 // Admin-or-owner only. Players can now log in, but a player session doesn't unlock
 // these yet -- they are the admin's view, not the player API.
-// Lists only which providers each player has linked, never the device IDs or emails:
-// a device ID works like a password, so it shouldn't show up in an admin listing.
+// Lists only which providers each player has linked, never the identities themselves:
+// emails are personal data, and the hardware ID stays out of a casual listing too.
 app.MapGet("/api/players", async (server.Models.Db db) =>
 {
     var players = await db.Players
@@ -102,34 +107,16 @@ app.MapGet("/api/players", async (server.Models.Db db) =>
         providers = p.providers.Select(PlayerAuth.ProviderName).Order().ToList(),
     }));
 }).RequireAdmin();
-// Admin-created players get a device identity only if a deviceId is given, so a
-// player made this way can't log in until they have one.
+// Admin-created players have no way to sign in: credentials only come from the
+// player routes (register mints a device token, link/email adds an email).
 app.MapPost("/api/players", async (server.Models.Db db, AdminCreatePlayerRequest request) =>
 {
-    var deviceId = request.DeviceId?.Trim();
-    if (deviceId is not null && (deviceId.Length == 0 || deviceId.Length > 254))
-        return Results.BadRequest(new { error = "deviceId must be 1-254 characters when given" });
     if (!PlayerAuth.TryNormalizeDisplayName(request.DisplayName, out var displayName))
         return Results.BadRequest(new { error = PlayerAuth.DisplayNameRule });
 
     var player = new server.Models.Player { Xp = request.Xp, DisplayName = displayName };
     db.Players.Add(player);
-    if (deviceId is not null)
-        db.PlayerIdentities.Add(new server.Models.PlayerIdentity
-        {
-            Player = player,
-            Provider = server.Models.PlayerProvider.Device,
-            Subject = deviceId,
-        });
-
-    try
-    {
-        await db.SaveChangesAsync();
-    }
-    catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" })
-    {
-        return Results.Json(new { error = "a player with that deviceId already exists" }, statusCode: StatusCodes.Status409Conflict);
-    }
+    await db.SaveChangesAsync();
     return Results.Ok(new { id = player.Id, displayName = player.DisplayName, xp = player.Xp });
 }).RequireAdmin();
 

@@ -11,7 +11,8 @@ namespace Hakutaku
     static class Routes
     {
         public const string Register = "/api/players/register";
-        public const string Login = "/api/players/login";
+        public const string LoginDevice = "/api/players/login/device";
+        public const string LoginEmail = "/api/players/login/email";
         public const string LinkEmail = "/api/players/link/email";
         public const string DisplayName = "/api/players/display-name";
         public const string VerifyEmail = "/api/players/email/verify";
@@ -22,13 +23,13 @@ namespace Hakutaku
         public const string Characters = "/api/characters";
     }
 
-    // What register and login answer with. Register also echoes the deviceId, which the
-    // SDK has no use for since the caller sent it.
+    // What register and both logins answer with. DeviceToken comes only from register.
     class SessionWire
     {
         public string? Id { get; set; }
         public string? DisplayName { get; set; }
         public int Xp { get; set; }
+        public string? DeviceToken { get; set; }
         public string? Token { get; set; }
         public DateTime ExpiresAt { get; set; }
     }
@@ -48,6 +49,7 @@ namespace Hakutaku
     class VerifiedWire
     {
         public bool Verified { get; set; }
+        public bool DeviceTokenRemoved { get; set; }
     }
 
     class SentWire

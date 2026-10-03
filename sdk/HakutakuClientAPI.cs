@@ -10,12 +10,14 @@ namespace Hakutaku
     // through HakutakuSettings.staticSettings and staticPlayer. This is what a game uses:
     //
     //     HakutakuSettings.staticSettings.ServerUrl = "https://51.79.242.169.nip.io";
-    //     HakutakuClientAPI.LoginWithDeviceID(
-    //         new LoginWithDeviceIDRequest { DeviceId = SystemInfo.deviceUniqueIdentifier },
+    //     HakutakuClientAPI.LoginWithDeviceToken(
+    //         new LoginWithDeviceTokenRequest { DeviceToken = storedDeviceToken },
     //         result => Debug.Log("Logged in as " + result.PlayerId),
     //         error => Debug.LogError(error.GenerateErrorReport()));
     //
-    // Anything that needs several players at once uses HakutakuClientInstanceAPI directly.
+    // The token comes from RegisterGuest on first launch; docs/components/sdk.md has the
+    // whole launch flow. Anything that needs several players at once uses
+    // HakutakuClientInstanceAPI directly.
     public static class HakutakuClientAPI
     {
         static readonly HakutakuClientInstanceAPI Instance =
@@ -25,11 +27,17 @@ namespace Hakutaku
 
         public static void ForgetAllCredentials() => Instance.ForgetAllCredentials();
 
-        public static void LoginWithDeviceID(LoginWithDeviceIDRequest request, Action<LoginResult>? resultCallback, Action<HakutakuError>? errorCallback) =>
-            Instance.LoginWithDeviceID(request, resultCallback, errorCallback);
+        public static void RegisterGuest(RegisterGuestRequest request, Action<LoginResult>? resultCallback, Action<HakutakuError>? errorCallback) =>
+            Instance.RegisterGuest(request, resultCallback, errorCallback);
 
-        public static Task<HakutakuResult<LoginResult>> LoginWithDeviceIDAsync(LoginWithDeviceIDRequest request) =>
-            Instance.LoginWithDeviceIDAsync(request);
+        public static Task<HakutakuResult<LoginResult>> RegisterGuestAsync(RegisterGuestRequest request) =>
+            Instance.RegisterGuestAsync(request);
+
+        public static void LoginWithDeviceToken(LoginWithDeviceTokenRequest request, Action<LoginResult>? resultCallback, Action<HakutakuError>? errorCallback) =>
+            Instance.LoginWithDeviceToken(request, resultCallback, errorCallback);
+
+        public static Task<HakutakuResult<LoginResult>> LoginWithDeviceTokenAsync(LoginWithDeviceTokenRequest request) =>
+            Instance.LoginWithDeviceTokenAsync(request);
 
         public static void LoginWithEmailAddress(LoginWithEmailAddressRequest request, Action<LoginResult>? resultCallback, Action<HakutakuError>? errorCallback) =>
             Instance.LoginWithEmailAddress(request, resultCallback, errorCallback);

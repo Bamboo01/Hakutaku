@@ -36,14 +36,18 @@ dotnet run -- probe --url http://localhost:8090   # full Docker stack, or prod o
 
 | Step | Expected |
 |---|---|
-| Register N new devices, each with a display name | `200` each, a new player id, the name it asked for |
-| Register player 1's device again, with a different name | `200`, **the same** player id, and the **original** name |
+| Register N guests, each with a display name | `200` each, a new player id, the name it asked for, and a device token |
+| Player 1 logs in with its device token | `200`, **the same** player id |
+| A made-up device token | `401` |
+| Register player 1's hardware ID again | `200`, a **different** player: the hardware ID is only recorded |
+| An old client's `register` body (`deviceId`, no `hardwareId`) | `400` |
 | Rename player 1 (with padding spaces) | `200`, stored trimmed |
 | Player 2 takes player 1's name | `200`, since names aren't unique |
 | Names too short, too long, or with a control character | `400` each |
 | Link an email to player 1 | `200`, unverified |
 | Link a second email to player 1 | `409` |
 | Player 2 links player 1's email | `409` |
+| Player 1's device token, with the email linked but not verified | `200`: it's only removed at verification |
 | Verify with a wrong code | `400` |
 | Email login | `200`, the same player id as the device, with the new name |
 | Email login, wrong password / unknown email | `401` both, with the same message |
@@ -51,6 +55,11 @@ dotnet run -- probe --url http://localhost:8090   # full Docker stack, or prod o
 | Reset with a made-up code | `400` |
 | `link/email` with no token, and with a made-up token; `display-name` with no token | `401` |
 | Every player: events, characters, `/api/players`, `/api/admin/*` | **denied** |
+
+The probe can't check that **verifying removes the device token**, because that
+needs the real mailed code. Do it in the shell: `new`, `link`, `verify <code>`,
+then `device <token>` should get a `401` while `login <email> <password>` still
+works.
 
 "Denied" means `401` or `403`, which is what the admin gate answers locally
 and over the SSH tunnel. When `--url` is anything other than this machine, a
@@ -67,8 +76,9 @@ probe keeps checking the new rule rather than flagging it as a failure.
 
 ### Rate limits make it slow, on purpose
 
-`register`, `login`, and the four mail routes together each allow **5 calls a
-minute per IP**. The server sends no `Retry-After` header, so when the probe
+`register`, `login/device`, `login/email`, and the four mail routes together
+each allow **5 calls a minute per IP**. A default 3-player run uses all 5 of
+`register`'s. The server sends no `Retry-After` header, so when the probe
 gets a `429` it waits 10 seconds and tries again, for up to about 70 seconds.
 Three players finish in a few seconds. Six players, or two runs back to back,
 take a couple of minutes. That is the limiter working, not a hang.
@@ -76,10 +86,10 @@ take a couple of minutes. That is the limiter working, not a hang.
 ## The shell
 
 ```text
-> new Captain Bob              register a player with a random device ID (the name is optional)
+> new Captain Bob              register a guest (the name is optional); prints its device token
 player-1> name Admiral Bob     change the display name
 player-1> link                 link a random email + password (printed)
-player-1> verify 845546        the code, from the server log
+player-1> verify 845546        the code, from the server log; this removes the device token
 player-1> forgot sim-…@example.com
 player-1> reset sim-…@example.com 123456 a-new-password
 player-1> login sim-…@example.com a-new-password     a second "device" for the same player
@@ -87,12 +97,11 @@ player-2> event level_up level=2 zone=forest         WritePlayerEvent, values ty
 player-2> raw GET /api/players                       any route, with this player's token
 player-2> probe                                      the access checks, as this player
 player-2> players                                    everyone made this session
-player-2> device 07054d4b-…                          log in again with a device ID you already have
+player-2> device DeQrM3…                             log in again with a device token from an earlier 'new'
 ```
 
-`help` lists every command. `new` takes a display name and `device` takes a
-device ID. They are separate commands because the server accepts any string
-as a device ID, so a single command couldn't tell which one you meant.
+`help` lists every command. Each mock player gets its own made-up hardware ID,
+which the server only records.
 
 **Getting the code.** With no `SMTP_HOST` configured, which is the case locally
 and in production today, the server doesn't send mail. It logs the message
@@ -124,7 +133,7 @@ You can, with two things to know:
 | File | What it holds |
 |---|---|
 | `Program.cs` | Argument parsing, and the dispatch to `probe` or `shell` |
-| `MockPlayer.cs` | One mock player: its own `HakutakuClientInstanceAPI` (so its own session), device ID, and email and password once linked |
+| `MockPlayer.cs` | One mock player: its own `HakutakuClientInstanceAPI` (so its own session), a made-up hardware ID, its device token, and email and password once linked |
 | `Probe.cs` | The scripted run, the `AccessChecks` table, the `429` retry |
 | `Report.cs` | Prints each check as `ok` / `FAIL` and keeps the tally |
 | `Shell.cs` | The interactive commands |

@@ -11,8 +11,13 @@ namespace server.Models
         public Guid Id { get; set; }
         public int Xp { get; set; }
         // What the game shows for this player. Optional and not unique: it is a label, not
-        // a way to sign in, so two players can both be "Bob". See PlayerAuth.NormalizeDisplayName.
+        // a way to sign in, so two players can both be "Bob". See PlayerAuth.TryNormalizeDisplayName.
         public string? DisplayName { get; set; }
+        // The hardware ID the game sent when this player registered (e.g. Unity's
+        // SystemInfo.deviceUniqueIdentifier). For support and spotting reroll farms only:
+        // it isn't secret, so nothing ever looks a player up or signs one in by it. Kept
+        // here rather than on the device identity, which is deleted at email verification.
+        public string? RegisteredHardwareId { get; set; }
     }
 
     // A Player can have multiple characters. No independent progress/stats of
@@ -58,8 +63,8 @@ namespace server.Models
             modelBuilder.Entity<PlayerIdentity>(e =>
             {
                 e.ToTable("player_identities", t => t.HasCheckConstraint("ck_player_identities_provider", "provider IN (0, 1, 2)"));
-                // (provider, subject) is the key because one device, email or Steam account
-                // must map to at most one player -- and it makes find-or-create race-safe.
+                // (provider, subject) is the key because one device token, email or Steam
+                // account must map to at most one player, and it makes lookups by credential cheap.
                 e.HasKey(x => new { x.Provider, x.Subject });
                 e.Property(x => x.PlayerId).HasColumnName("player_id");
                 e.Property(x => x.Provider).HasColumnName("provider");

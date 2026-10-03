@@ -18,8 +18,8 @@ using Hakutaku.ClientModels;
 
 HakutakuSettings.staticSettings.ServerUrl = "https://51.79.242.169.nip.io";
 
-HakutakuClientAPI.LoginWithDeviceID(
-    new LoginWithDeviceIDRequest { DeviceId = SystemInfo.deviceUniqueIdentifier },
+HakutakuClientAPI.LoginWithDeviceToken(
+    new LoginWithDeviceTokenRequest { DeviceToken = storedDeviceToken },
     result => Debug.Log("Logged in as " + result.PlayerId),
     error => Debug.LogError(error.GenerateErrorReport()));
 ```
@@ -31,7 +31,7 @@ form that returns a result instead of taking callbacks:
 ```csharp
 var client = new HakutakuClientInstanceAPI(new HakutakuApiSettings { ServerUrl = "http://localhost:5008" });
 
-var login = await client.LoginWithDeviceIDAsync(new LoginWithDeviceIDRequest { DeviceId = deviceId });
+var login = await client.LoginWithDeviceTokenAsync(new LoginWithDeviceTokenRequest { DeviceToken = storedDeviceToken });
 if (login.Error != null)
     Console.WriteLine(login.Error.GenerateErrorReport());
 else
@@ -41,12 +41,54 @@ else
 No call throws on an HTTP or network failure. Every result has exactly one of
 `Result` and `Error` set.
 
+## The launch flow
+
+The SDK doesn't store anything. The game keeps two things between launches: the
+**device token**, while the player is a guest, and the **session**, valid 30
+days. The session is **all three** of `PlayerId`, `SessionTicket` and
+`SessionExpiration` from the authentication context. On each launch:
+
+1. **A saved session that hasn't expired?** Put all three back into
+   `HakutakuSettings.staticPlayer`, and you're signed in with no network call.
+   Restoring the ticket without the `PlayerId` looks fine at first:
+   `IsClientLoggedIn()` only checks the ticket. But calls that send the player's
+   id, such as `WritePlayerEvent`, would then send none.
+2. **Otherwise, a saved device token?** Call `LoginWithDeviceToken`. If it fails
+   with `NotAuthenticated`, the token is gone: go to step 3. **Don't register a
+   new guest automatically.** That silently replaces the player's account with an
+   empty one, the classic "I reinstalled and lost everything".
+3. **Otherwise, show a title screen** with **Start**, which calls
+   `RegisterGuest` and saves `LoginResult.DeviceToken`, and **I have an
+   account**, which calls `LoginWithEmailAddress`.
+
+And two moments to handle:
+
+- **`VerifyEmail` returns `DeviceTokenRemoved = true`:** delete the stored
+  device token. The server has already deleted it, so from now on the player
+  signs in by email. The current session keeps working.
+- **The player signs into a different account by email:** delete the stored
+  device token too. Otherwise the next launch signs back into the throwaway guest.
+
+!!! warning "Until refresh tokens exist, a verified player retypes their password every 30 days"
+    A verified player has no device token, so between launches only the saved
+    session keeps them signed in. When it expires, they sign in by email again.
+    Refresh tokens (`TODO.md`) will remove this.
+
+!!! danger "The hardware ID is not a credential"
+    `RegisterGuest` needs a `HardwareId`, and `SystemInfo.deviceUniqueIdentifier`
+    is the right thing to send. The server only **records** it, for support and
+    spotting reroll farms, because it isn't secret: analytics, ad and crash SDKs
+    read and send it. The credential is the **device token** the server mints.
+    Store that like a password: `PlayerPrefs` is fine for a prototype, and a
+    shipped game should use the iOS Keychain or the Android Keystore.
+
 ## The calls
 
 | SDK call | PlayFab counterpart | Route | Works with a player token today? |
 |---|---|---|---|
-| `LoginWithDeviceID` | `LoginWithCustomID` | `POST /api/players/register` | Yes (public) |
-| `LoginWithEmailAddress` | same | `POST /api/players/login` | Yes (public) |
+| `RegisterGuest` | `LoginWithCustomID` with `CreateAccount` | `POST /api/players/register` | Yes (public) |
+| `LoginWithDeviceToken` | `LoginWithCustomID` | `POST /api/players/login/device` | Yes (public) |
+| `LoginWithEmailAddress` | same | `POST /api/players/login/email` | Yes (public) |
 | `UpdateUserTitleDisplayName` | same | `POST /api/players/display-name` | Yes |
 | `LinkEmailAddress` | `AddUsernamePassword` | `POST /api/players/link/email` | Yes |
 | `VerifyEmail` | — | `POST /api/players/email/verify` | Yes |
@@ -66,15 +108,14 @@ Differences from PlayFab worth knowing:
 
 - **No `TitleId`.** Hakutaku is self-hosted and serves one game, so settings
   hold a `ServerUrl` instead.
-- **No `CreateAccount` flag** on device login: `register` always
-  finds-or-creates.
-- **Device login can set the display name**: `LoginWithDeviceIDRequest.DisplayName`
-  is optional and used only when the call creates the player. A known device
-  keeps its name, and `LoginResult.DisplayName` shows what stuck (null for none).
-  `UpdateUserTitleDisplayName` changes it any time. Names are 3–25 characters and
+- **Creating and signing in are separate calls.** PlayFab's `LoginWithCustomID`
+  takes a client-chosen ID and a `CreateAccount` flag. Here the server mints
+  the credential in `RegisterGuest`, and `LoginWithDeviceToken` never creates.
+- **Display names** are optional on `RegisterGuest`, and
+  `UpdateUserTitleDisplayName` changes them any time. They're 3–25 characters and
   **not unique**, so never use one to identify a player.
 - **`ForgetAllCredentials` is client-side only.** There is no player logout
-  route, so the token stays valid on the server until it expires (30 days) or a
+  route, so the session stays valid on the server until it expires (30 days) or a
   password reset revokes it.
 - `SendRawRequestAsync(method, path, json)` sends any request with the current
   token and returns the body as text. The simulator uses it to check that admin

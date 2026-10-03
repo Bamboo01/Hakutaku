@@ -2,6 +2,8 @@ namespace server.Models
 {
     public enum PlayerProvider : short
     {
+        // A guest's device token, minted by register. Deleted once the player verifies an
+        // email, since the account is recoverable from then on.
         Device = 0,
         Email = 1,
         Steam = 2,
@@ -14,7 +16,9 @@ namespace server.Models
         public Guid PlayerId { get; set; }
         public Player Player { get; set; } = null!;
         public PlayerProvider Provider { get; set; }
-        // The provider's stable id: the device UUID, the lowercased email, or a Steam id.
+        // The provider's stable id. For a device, the SHA-256 of the device token as lowercase
+        // hex -- the token is a credential, so only its hash is kept. Otherwise the lowercased
+        // email, or a Steam id.
         public string Subject { get; set; } = "";
         // Email provider only. Kept apart from Subject because it is PII.
         public string? Email { get; set; }

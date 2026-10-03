@@ -39,12 +39,16 @@ namespace Hakutaku
 
         // ---- Account: login and identities -------------------------------------------
 
-        public async Task<HakutakuResult<LoginResult>> LoginWithDeviceIDAsync(LoginWithDeviceIDRequest request) =>
-            Map(await Call<SessionWire>("POST", Routes.Register, new { deviceId = request.DeviceId, displayName = request.DisplayName }, false).ConfigureAwait(false),
+        public async Task<HakutakuResult<LoginResult>> RegisterGuestAsync(RegisterGuestRequest request) =>
+            Map(await Call<SessionWire>("POST", Routes.Register, new { hardwareId = request.HardwareId, displayName = request.DisplayName }, false).ConfigureAwait(false),
+                StartSession);
+
+        public async Task<HakutakuResult<LoginResult>> LoginWithDeviceTokenAsync(LoginWithDeviceTokenRequest request) =>
+            Map(await Call<SessionWire>("POST", Routes.LoginDevice, new { deviceToken = request.DeviceToken }, false).ConfigureAwait(false),
                 StartSession);
 
         public async Task<HakutakuResult<LoginResult>> LoginWithEmailAddressAsync(LoginWithEmailAddressRequest request) =>
-            Map(await Call<SessionWire>("POST", Routes.Login, new { email = request.Email, password = request.Password }, false).ConfigureAwait(false),
+            Map(await Call<SessionWire>("POST", Routes.LoginEmail, new { email = request.Email, password = request.Password }, false).ConfigureAwait(false),
                 StartSession);
 
         public async Task<HakutakuResult<UpdateUserTitleDisplayNameResult>> UpdateUserTitleDisplayNameAsync(UpdateUserTitleDisplayNameRequest request) =>
@@ -57,7 +61,7 @@ namespace Hakutaku
 
         public async Task<HakutakuResult<VerifyEmailResult>> VerifyEmailAsync(VerifyEmailRequest request) =>
             Map(await Call<VerifiedWire>("POST", Routes.VerifyEmail, new { code = request.Code }, true).ConfigureAwait(false),
-                w => new VerifyEmailResult { Verified = w.Verified });
+                w => new VerifyEmailResult { Verified = w.Verified, DeviceTokenRemoved = w.DeviceTokenRemoved });
 
         public async Task<HakutakuResult<ResendVerificationEmailResult>> ResendVerificationEmailAsync(ResendVerificationEmailRequest request) =>
             Map(await Call<SentWire>("POST", Routes.ResendEmail, null, true).ConfigureAwait(false),
@@ -112,8 +116,11 @@ namespace Hakutaku
 
         // ---- Callback versions ----------------------------------------------------------
 
-        public void LoginWithDeviceID(LoginWithDeviceIDRequest request, Action<LoginResult>? resultCallback, Action<HakutakuError>? errorCallback) =>
-            Dispatch(LoginWithDeviceIDAsync(request), resultCallback, errorCallback);
+        public void RegisterGuest(RegisterGuestRequest request, Action<LoginResult>? resultCallback, Action<HakutakuError>? errorCallback) =>
+            Dispatch(RegisterGuestAsync(request), resultCallback, errorCallback);
+
+        public void LoginWithDeviceToken(LoginWithDeviceTokenRequest request, Action<LoginResult>? resultCallback, Action<HakutakuError>? errorCallback) =>
+            Dispatch(LoginWithDeviceTokenAsync(request), resultCallback, errorCallback);
 
         public void LoginWithEmailAddress(LoginWithEmailAddressRequest request, Action<LoginResult>? resultCallback, Action<HakutakuError>? errorCallback) =>
             Dispatch(LoginWithEmailAddressAsync(request), resultCallback, errorCallback);
@@ -186,6 +193,7 @@ namespace Hakutaku
                 SessionTicket = session.Token ?? "",
                 SessionExpiration = session.ExpiresAt,
                 Xp = session.Xp,
+                DeviceToken = session.DeviceToken,
             };
         }
 

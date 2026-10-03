@@ -10,15 +10,15 @@ namespace simulator
     class Shell
     {
         const string HelpText = """
-              new [display name]              register a new mock player with a random device ID, and switch to it
-              device <deviceId>               log in with a device ID you already have, as a new mock player
+              new [display name]              register a new guest (new pretend hardware) and switch to it; prints its device token
+              device <deviceToken>            log in with a device token you already have, as a new mock player
               login <email> <password>        sign in by email as a new mock player, like a second device, and switch to it
               players                         list the mock players made in this session
               use <n>                         switch to mock player n
 
               name <display name>             set the current player's display name (3-25 characters, not unique)
               link [<email> <password>]       link an email and password to the current player (random if left out)
-              verify <code>                   redeem the emailed code; with no SMTP it is in the server log
+              verify <code>                   redeem the emailed code (with no SMTP it is in the server log); removes the device token
               resend                          mail a new verification code
               forgot <email>                  mail a password-reset code (only verified emails get one)
               reset <email> <code> <password> set a new password; revokes all of that player's sessions
@@ -83,11 +83,11 @@ namespace simulator
                     break;
 
                 case "new":
-                    await New(MockPlayer.NewDeviceId(), rest.Length > 0 ? rest : null);
+                    await Register(rest.Length > 0 ? rest : null);
                     break;
 
                 case "device" when args.Length == 1:
-                    await New(args[0], null);
+                    await DeviceLogin(args[0]);
                     break;
 
                 case "login" when args.Length == 2:
@@ -113,8 +113,11 @@ namespace simulator
                     break;
 
                 case "verify" when args.Length == 1:
-                    Show(await p.Client.VerifyEmailAsync(new VerifyEmailRequest { Code = args[0] }),
-                        r => r.Verified ? "verified" : "not verified");
+                    var verified = await p.Client.VerifyEmailAsync(new VerifyEmailRequest { Code = args[0] });
+                    Show(verified, r => !r.Verified ? "not verified"
+                        : r.DeviceTokenRemoved ? "verified; the device token is gone, so log in by email from now on"
+                        : "verified");
+                    if (verified.Result?.DeviceTokenRemoved == true) p.DeviceToken = null;
                     break;
 
                 case "resend":
@@ -178,12 +181,20 @@ namespace simulator
             }
         }
 
-        // A display name only applies if this creates the player; a known device keeps its own.
-        async Task New(string deviceId, string? displayName)
+        async Task Register(string? displayName)
         {
-            var player = new MockPlayer($"player-{players.Count + 1}", url) { DeviceId = deviceId };
-            var result = await player.Client.LoginWithDeviceIDAsync(new LoginWithDeviceIDRequest { DeviceId = deviceId, DisplayName = displayName });
-            Show(result, r => $"player {r.PlayerId}, {Named(r.DisplayName)}, xp {r.Xp}, device {deviceId}");
+            var player = new MockPlayer($"player-{players.Count + 1}", url);
+            var result = await player.Client.RegisterGuestAsync(new RegisterGuestRequest { HardwareId = player.HardwareId, DisplayName = displayName });
+            Show(result, r => $"player {r.PlayerId}, {Named(r.DisplayName)}, xp {r.Xp}\n  device token {r.DeviceToken} (log in again with 'device <token>')");
+            player.DeviceToken = result.Result?.DeviceToken;
+            Add(player, result.Result);
+        }
+
+        async Task DeviceLogin(string deviceToken)
+        {
+            var player = new MockPlayer($"player-{players.Count + 1}", url) { DeviceToken = deviceToken };
+            var result = await player.Client.LoginWithDeviceTokenAsync(new LoginWithDeviceTokenRequest { DeviceToken = deviceToken });
+            Show(result, r => $"player {r.PlayerId}, {Named(r.DisplayName)}, xp {r.Xp}");
             Add(player, result.Result);
         }
 
@@ -227,7 +238,7 @@ namespace simulator
                 // Only what this client holds: a token revoked server-side (by a password reset,
                 // say) still shows here until a call gets a 401.
                 var session = p.Client.IsClientLoggedIn() ? "has token" : "no token";
-                Console.WriteLine($" {marker}{i + 1}  {p.Name,-10} {p.PlayerId,-36}  {session,-10}  {Named(p.DisplayName),-27}  {p.Email ?? "no email"}  {(p.DeviceId is null ? "" : "device " + p.DeviceId)}");
+                Console.WriteLine($" {marker}{i + 1}  {p.Name,-10} {p.PlayerId,-36}  {session,-10}  {Named(p.DisplayName),-27}  {p.Email ?? "no email"}  {(p.DeviceToken is null ? "no device token" : "device token " + p.DeviceToken)}");
             }
         }
 

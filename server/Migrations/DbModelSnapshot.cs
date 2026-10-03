@@ -157,6 +157,9 @@ namespace server.Migrations
                     b.Property<string>("DisplayName")
                         .HasColumnType("text");
 
+                    b.Property<string>("RegisteredHardwareId")
+                        .HasColumnType("text");
+
                     b.Property<int>("Xp")
                         .HasColumnType("integer");
 

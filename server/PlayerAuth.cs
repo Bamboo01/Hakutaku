@@ -6,9 +6,10 @@ using server.Models;
 
 namespace server
 {
-    public record PlayerRegisterRequest(string? DeviceId, string? DisplayName);
+    public record PlayerRegisterRequest(string? HardwareId, string? DisplayName);
+    public record PlayerDeviceLoginRequest(string? DeviceToken);
     public record PlayerEmailRequest(string? Email, string? Password);
-    public record AdminCreatePlayerRequest(string? DeviceId, int Xp, string? DisplayName);
+    public record AdminCreatePlayerRequest(int Xp, string? DisplayName);
     public record PlayerDisplayNameRequest(string? DisplayName);
     public record PlayerCodeRequest(string? Code);
     public record PlayerForgotRequest(string? Email);
@@ -40,6 +41,12 @@ namespace server
 
         static bool IsUniqueViolation(DbUpdateException e) =>
             e.InnerException is PostgresException { SqlState: "23505" };
+
+        // What player_identities.subject holds for a device: the SHA-256 of the token as
+        // lowercase hex. The AddDeviceTokens migration put the old client-chosen device IDs
+        // into the same form, so those keep working as tokens.
+        static string HashDeviceToken(string token) =>
+            Convert.ToHexStringLower(AdminAuth.HashToken(token.Trim()));
 
         static Task<Player?> FindByIdentity(Db db, PlayerProvider provider, string subject) =>
             db.PlayerIdentities
@@ -174,49 +181,51 @@ namespace server
 
         public static void MapPlayerEndpoints(this WebApplication app)
         {
-            // Find-or-create by device ID, then start a session. The device UUID is made by
-            // the game and kept on the device, so it works as a password nobody types:
-            // whoever holds it is that player.
-            // displayName is optional and only used when this call creates the player; for a
-            // known device it is checked but ignored, and the stored name is returned so the
-            // game can see what stuck. Changing it later is /api/players/display-name.
+            // Makes a new guest player, every time: nothing is looked up. The server mints the
+            // device token -- the guest's only credential -- and returns it exactly once; the
+            // game keeps it and signs in with login/device from then on.
+            // hardwareId (e.g. Unity's SystemInfo.deviceUniqueIdentifier) is recorded for
+            // support and abuse tracking only. It isn't secret, so it never finds or signs in
+            // a player; that is the mistake the old find-or-create-by-device-ID register made.
             app.MapPost("/api/players/register", async (Db db, PlayerRegisterRequest request) =>
             {
-                if (string.IsNullOrWhiteSpace(request.DeviceId) || request.DeviceId.Length > 254)
-                    return Results.BadRequest(new { error = "deviceId is required" });
+                var hardwareId = request.HardwareId?.Trim();
+                if (string.IsNullOrEmpty(hardwareId) || hardwareId.Length > 254)
+                    return Results.BadRequest(new { error = "hardwareId is required (1-254 characters); register no longer takes a deviceId" });
                 if (!TryNormalizeDisplayName(request.DisplayName, out var displayName))
                     return Results.BadRequest(new { error = DisplayNameRule });
 
-                var deviceId = request.DeviceId.Trim();
-                var player = await FindByIdentity(db, PlayerProvider.Device, deviceId);
-                if (player is null)
+                var deviceToken = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
+                var player = new Player { DisplayName = displayName, RegisteredHardwareId = hardwareId };
+                db.Players.Add(player);
+                db.PlayerIdentities.Add(new PlayerIdentity
                 {
-                    player = new Player { DisplayName = displayName };
-                    db.Players.Add(player);
-                    db.PlayerIdentities.Add(new PlayerIdentity
-                    {
-                        Player = player,
-                        Provider = PlayerProvider.Device,
-                        Subject = deviceId,
-                    });
-                    try
-                    {
-                        await db.SaveChangesAsync();
-                    }
-                    catch (DbUpdateException e) when (IsUniqueViolation(e))
-                    {
-                        // Lost a race with another registration for the same device between
-                        // the lookup and the save. Forget the rows that failed to insert,
-                        // or the session save below would retry them, then use the winner.
-                        db.ChangeTracker.Clear();
-                        player = await FindByIdentity(db, PlayerProvider.Device, deviceId);
-                        if (player is null) throw;
-                    }
-                }
+                    Player = player,
+                    Provider = PlayerProvider.Device,
+                    Subject = HashDeviceToken(deviceToken),
+                });
+                await db.SaveChangesAsync();
 
                 var (token, expiresAt) = await IssueSession(db, player.Id);
-                return Results.Ok(new { id = player.Id, deviceId, displayName = player.DisplayName, xp = player.Xp, token, expiresAt });
+                return Results.Ok(new { id = player.Id, displayName = player.DisplayName, xp = player.Xp, deviceToken, token, expiresAt });
             }).RequireRateLimiting("player-register");
+
+            // Signs a guest in with the token register gave it. Never creates anything: an
+            // unknown token is a 401, and the game should then offer "new game" or "I have an
+            // account" rather than quietly starting a fresh player. Tokens are 256 random
+            // bits, so guessing is hopeless and the rate limit is only about load.
+            app.MapPost("/api/players/login/device", async (Db db, PlayerDeviceLoginRequest request) =>
+            {
+                if (string.IsNullOrWhiteSpace(request.DeviceToken) || request.DeviceToken.Length > 254)
+                    return Results.BadRequest(new { error = "deviceToken is required" });
+
+                var player = await FindByIdentity(db, PlayerProvider.Device, HashDeviceToken(request.DeviceToken));
+                if (player is null)
+                    return Results.Json(new { error = "unknown device token" }, statusCode: StatusCodes.Status401Unauthorized);
+
+                var (token, expiresAt) = await IssueSession(db, player.Id);
+                return Results.Ok(new { id = player.Id, displayName = player.DisplayName, xp = player.Xp, token, expiresAt });
+            }).RequireRateLimiting("player-device-login");
 
             // Needs the player token. Sets or replaces the display name. Not rate limited, for
             // the same reason as link/email: it needs a session, and it is one cheap UPDATE.
@@ -235,10 +244,11 @@ namespace server
                 return Results.Ok(new { displayName });
             });
 
-            // Needs a player session. Adds an email identity next to the device one; it
-            // never replaces it. Deliberately not rate limited: it is gated by a session,
-            // and the cheap existence checks run before Argon2, so the expensive hash
-            // happens at most once per session.
+            // Needs a player session. Adds an email identity next to the device one. The
+            // device token keeps working until the email is verified (email/verify removes
+            // it), so a mistyped address can't strand a guest. Deliberately not rate limited:
+            // it is gated by a session, and the cheap existence checks run before Argon2, so
+            // the expensive hash happens at most once per session.
             app.MapPost("/api/players/link/email", async (Db db, HttpContext http, IEmailSender mail, ILoggerFactory logs, PlayerEmailRequest request) =>
             {
                 var player = await FindBySession(db, http);
@@ -299,6 +309,10 @@ namespace server
             });
 
             // Needs the player token. Redeems the code mailed by link/email or /email/resend.
+            // A verified email makes the account recoverable, so the device token -- a
+            // credential that never expires, sitting on one phone -- is deleted in the same
+            // transaction: a verified player never has one. The session in use carries on;
+            // deviceTokenRemoved tells the game to drop its stored copy.
             app.MapPost("/api/players/email/verify", async (Db db, HttpContext http, PlayerCodeRequest request) =>
             {
                 var player = await FindBySession(db, http);
@@ -309,17 +323,22 @@ namespace server
                 if (identity is null)
                     return Results.BadRequest(new { error = "no email is linked to this player" });
                 if (identity.VerifiedAt is not null)
-                    return Results.Ok(new { verified = true });
+                    return Results.Ok(new { verified = true, deviceTokenRemoved = false });
 
                 var code = request.Code?.Trim();
                 if (!LooksLikeCode(code) || !await RedeemCode(db, player.Id, EmailCodePurpose.Verify, code!))
                     return Results.BadRequest(new { error = "invalid or expired code" });
 
                 var now = DateTime.UtcNow;
+                await using var transaction = await db.Database.BeginTransactionAsync();
                 await db.PlayerIdentities
                     .Where(i => i.PlayerId == player.Id && i.Provider == PlayerProvider.Email)
                     .ExecuteUpdateAsync(s => s.SetProperty(i => i.VerifiedAt, now));
-                return Results.Ok(new { verified = true });
+                var removed = await db.PlayerIdentities
+                    .Where(i => i.PlayerId == player.Id && i.Provider == PlayerProvider.Device)
+                    .ExecuteDeleteAsync();
+                await transaction.CommitAsync();
+                return Results.Ok(new { verified = true, deviceTokenRemoved = removed > 0 });
             }).RequireRateLimiting("player-mail");
 
             // Needs the player token. Mails a new code, at most once a minute per player.
@@ -380,7 +399,8 @@ namespace server
 
             // Sets a new password if the code mailed by /password/forgot is right. Every
             // session the player has is revoked, since a reset usually means something
-            // went wrong; they sign in again (the device ID also still works).
+            // went wrong; they sign in again by email. There is no device token to revoke:
+            // a reset needs a verified email, and verifying already removed it.
             app.MapPost("/api/players/password/reset", async (Db db, PlayerResetRequest request) =>
             {
                 var email = NormalizeEmail(request.Email);
@@ -408,7 +428,7 @@ namespace server
             // Same answer for an unknown email and a wrong password, and an unknown email
             // still pays for a hash check, so neither the body nor the timing reveals
             // which emails exist -- the same rules as admin login.
-            app.MapPost("/api/players/login", async (Db db, PlayerEmailRequest request) =>
+            app.MapPost("/api/players/login/email", async (Db db, PlayerEmailRequest request) =>
             {
                 var email = NormalizeEmail(request.Email);
                 if (email is null || string.IsNullOrEmpty(request.Password) || request.Password.Length > 256)
