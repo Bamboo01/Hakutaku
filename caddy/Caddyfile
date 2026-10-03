@@ -1,19 +1,37 @@
 {$HAKUTAKU_DOMAIN} {
 
-	# The API is tunnel-only
-	# Nothing under /api has a public access point yet!!
-	# The current endpoints are all admin-gated, and a session cookie can only be minted
-	# through when logging in through SSH tunnel (see the readme). 
-	# 404 rather than 403 so this doesn't confirm the routes exist.
-	# Narrow this to /api/admin/* once players and game servers need public access.
-	# handle /api/* {
-	#	respond 404
-	#}
-
-	# Default-deny: only what's named here is public. The admin UI and its API
-	# live behind the SSH tunnel (see the readme), which bypasses Caddy entirely.
-	# Add a handle block per public route when players and game servers land.
+	# Default-deny: only what's named here is public. The admin UI and the rest
+	# of /api live behind the SSH tunnel (see the readme), which bypasses Caddy
+	# entirely. Add a handle block per public route as more of them land.
 	handle /Health {
+		reverse_proxy app:8080
+	}
+
+	# The public player-auth routes (server/PlayerAuth.cs). register and login are
+	# unauthenticated and rate-limited on the app side; link/email needs a player
+	# session token. Everything else under /api stays tunnel-only until the rest
+	# of the player API exists (see TODO.md item 2).
+	handle /api/players/register {
+		reverse_proxy app:8080
+	}
+	handle /api/players/login {
+		reverse_proxy app:8080
+	}
+	handle /api/players/link/email {
+		reverse_proxy app:8080
+	}
+	# Email verification and password reset. verify and resend need a player token;
+	# forgot and reset are unauthenticated. All four share one rate limit per IP.
+	handle /api/players/email/verify {
+		reverse_proxy app:8080
+	}
+	handle /api/players/email/resend {
+		reverse_proxy app:8080
+	}
+	handle /api/players/password/forgot {
+		reverse_proxy app:8080
+	}
+	handle /api/players/password/reset {
 		reverse_proxy app:8080
 	}
 

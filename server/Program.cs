@@ -16,6 +16,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<server.Models.Db>(o =>
     o.UseNpgsql(builder.Configuration.GetConnectionString("Db")));
 
+// Real mail only when an SMTP host is configured; otherwise messages are just logged.
+if (string.IsNullOrWhiteSpace(builder.Configuration["Smtp:Host"]))
+    builder.Services.AddSingleton<IEmailSender, LogEmailSender>();
+else
+    builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+
 // Behind Caddy every request would otherwise appear to come from Caddy itself, which would make
 // the per-IP login limit and the session IP useless. Only Caddy can reach this container in
 // production (compose.yaml publishes no port for it), so its forwarded headers are trusted.
@@ -30,6 +36,21 @@ builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     o.AddPolicy("admin-login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
+    // Public and unauthenticated (see PlayerAuth.cs), so this is the only thing standing
+    // between registration and someone hammering it to fill the table.
+    o.AddPolicy("player-register", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
+    // Email login is public too, and each attempt costs an Argon2 hash, so it gets the
+    // same per-IP limit as admin login. Separate policy so one doesn't use up the other.
+    o.AddPolicy("player-login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
+    // The mail routes (verify, resend, forgot, reset). Each one either sends an email or
+    // lets someone guess a code, so they share one per-IP limit, apart from login's.
+    o.AddPolicy("player-mail", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
 });
@@ -53,15 +74,59 @@ app.UseRateLimiter();
 // NOTE: do not map "/" to an endpoint. Static-file middleware skips any request
 // that already matched an endpoint, so a route here shadows the Vue UI below.
 app.MapGet("/Health", () => Results.Ok( new { health = "ok" } ));
-// Admin-or-owner only for now -- there's no separate player-facing auth yet,
-// so this is the only thing standing between these endpoints and the public
-// internet. See TODO.md for the planned player login.
-app.MapGet("/api/players", async (server.Models.Db db) => await db.Players.ToListAsync()).RequireAdmin();
-app.MapPost("/api/players", async (server.Models.Db db, server.Models.Player p) =>
+// The public player routes (register, link/email, login) are in PlayerAuth.cs.
+// caddy/Caddyfile has a handle block for each; nothing else here is public.
+app.MapPlayerEndpoints();
+
+// Admin-or-owner only. Players can now log in, but a player session doesn't unlock
+// these yet -- they are the admin's view, not the player API.
+// Lists only which providers each player has linked, never the device IDs or emails:
+// a device ID works like a password, so it shouldn't show up in an admin listing.
+app.MapGet("/api/players", async (server.Models.Db db) =>
 {
-    db.Players.Add(p);
-    await db.SaveChangesAsync();
-    return Results.Ok(p);
+    var players = await db.Players
+        .OrderBy(p => p.Id)
+        .Select(p => new
+        {
+            id = p.Id,
+            xp = p.Xp,
+            providers = db.PlayerIdentities.Where(i => i.PlayerId == p.Id).Select(i => i.Provider).ToList(),
+        })
+        .ToListAsync();
+    return Results.Ok(players.Select(p => new
+    {
+        p.id,
+        p.xp,
+        providers = p.providers.Select(PlayerAuth.ProviderName).Order().ToList(),
+    }));
+}).RequireAdmin();
+// Admin-created players get a device identity only if a deviceId is given, so a
+// player made this way can't log in until they have one.
+app.MapPost("/api/players", async (server.Models.Db db, AdminCreatePlayerRequest request) =>
+{
+    var deviceId = request.DeviceId?.Trim();
+    if (deviceId is not null && (deviceId.Length == 0 || deviceId.Length > 254))
+        return Results.BadRequest(new { error = "deviceId must be 1-254 characters when given" });
+
+    var player = new server.Models.Player { Xp = request.Xp };
+    db.Players.Add(player);
+    if (deviceId is not null)
+        db.PlayerIdentities.Add(new server.Models.PlayerIdentity
+        {
+            Player = player,
+            Provider = server.Models.PlayerProvider.Device,
+            Subject = deviceId,
+        });
+
+    try
+    {
+        await db.SaveChangesAsync();
+    }
+    catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" })
+    {
+        return Results.Json(new { error = "a player with that deviceId already exists" }, statusCode: StatusCodes.Status409Conflict);
+    }
+    return Results.Ok(new { id = player.Id, xp = player.Xp });
 }).RequireAdmin();
 
 app.MapGet("/api/characters", async (server.Models.Db db) => await db.Characters.ToListAsync()).RequireAdmin();

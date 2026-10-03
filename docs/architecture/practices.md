@@ -37,16 +37,20 @@ Two things follow from this, and both are intentional:
 | Surface | Public? | Reachable how |
 |---|---|---|
 | `GET /Health` | **Yes** | `https://51.79.242.169.nip.io/Health` |
+| `POST /api/players/register`, `POST /api/players/login` | **Yes** | `https://51.79.242.169.nip.io/api/players/...` — rate-limited, each returns a player session token |
+| `POST /api/players/link/email`, `email/verify`, `email/resend` | **Yes** | `https://51.79.242.169.nip.io/api/players/...` — need a player token; verify and resend are rate-limited |
+| `POST /api/players/password/forgot`, `password/reset` | **Yes** | `https://51.79.242.169.nip.io/api/players/password/...` — unauthenticated, rate-limited, tied to a mailed code |
 | The admin UI | No | SSH tunnel only |
 | `/api/admin/*` | No | SSH tunnel only |
-| `/api/players`, `/api/characters`, `/api/events` | No | SSH tunnel only, *and* admin-gated |
+| `/api/players` (list/create), `/api/characters`, `/api/events` | No | SSH tunnel only, *and* admin-gated |
 | Postgres | No | Docker network only |
 | Jenkins | No | SSH tunnel on a separate port |
 | **This wiki** | **Yes** | `https://docs.51.79.242.169.nip.io` |
 
-So there are exactly **two** public surfaces, and each has a stated reason:
+So there are exactly **three** kinds of public surface, and each has a stated reason:
 
 - **`/Health`** — the Jenkins smoke test curls it over HTTPS after every deploy.
+- **The player-auth routes** (`register`, `login`, `link/email`, the email verification pair and the password reset pair) — a player has to be able to identify themselves, and recover an account, before any other auth can exist. They are the only game-data paths with their own `handle` blocks in `caddy/Caddyfile`. Everything unauthenticated among them is rate-limited per IP; `link/email`, `email/verify` and `email/resend` are gated by a player session token.
 - **The wiki** — onboarding is useless if reading it requires an SSH tunnel.
 
 !!! warning "The wiki describes the system's internals"
@@ -58,11 +62,16 @@ So there are exactly **two** public surfaces, and each has a stated reason:
 
 ## The game-data endpoints are a stopgap
 
-`/api/players`, `/api/characters` and `/api/events` currently sit behind
-`.RequireAdmin()`. That is **not** the intended end state — game servers and
-players are meant to reach them without an admin session. It is there because
-the alternative was leaving them open to the internet while no player-facing
-auth exists.
+The list/create endpoints on `/api/players`, plus all of `/api/characters` and
+`/api/events`, still sit behind `.RequireAdmin()`. That is **not** the intended
+end state — game servers and players are meant to reach them without an admin
+session. It is there because the alternative was leaving them open to the
+internet while no player-facing auth exists.
+
+The player-auth routes are the first crack in that stopgap. A player can now
+register, link and verify an email, log in and reset a password, and gets a
+session token, but that token only unlocks the email routes. Nothing else is any
+less locked down than before.
 
 Two changes are planned and have not happened yet:
 

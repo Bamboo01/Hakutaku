@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using server.Models;
@@ -12,9 +13,11 @@ using server.Models;
 namespace server.Migrations
 {
     [DbContext(typeof(Db))]
-    partial class DbModelSnapshot : ModelSnapshot
+    [Migration("20261001123215_AddUniqueIndexOnPlayerDeviceId")]
+    partial class AddUniqueIndexOnPlayerDeviceId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -154,150 +157,19 @@ namespace server.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<int>("Xp")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
 
-                    b.ToTable("Players");
-                });
-
-            modelBuilder.Entity("server.Models.PlayerEmailCode", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
-
-                    b.Property<int>("Attempts")
-                        .HasColumnType("integer")
-                        .HasColumnName("attempts");
-
-                    b.Property<byte[]>("CodeHash")
-                        .IsRequired()
-                        .HasColumnType("bytea")
-                        .HasColumnName("code_hash");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
-
-                    b.Property<Guid>("PlayerId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("player_id");
-
-                    b.Property<short>("Purpose")
-                        .HasColumnType("smallint")
-                        .HasColumnName("purpose");
-
-                    b.Property<DateTime?>("UsedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("used_at");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PlayerId", "Purpose", "CreatedAt");
-
-                    b.ToTable("player_email_codes", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_player_email_codes_purpose", "purpose IN (0, 1)");
-                        });
-                });
-
-            modelBuilder.Entity("server.Models.PlayerIdentity", b =>
-                {
-                    b.Property<short>("Provider")
-                        .HasColumnType("smallint")
-                        .HasColumnName("provider");
-
-                    b.Property<string>("Subject")
-                        .HasColumnType("text")
-                        .HasColumnName("subject");
-
-                    b.Property<string>("Email")
-                        .HasColumnType("text")
-                        .HasColumnName("email");
-
-                    b.Property<DateTime>("LinkedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("linked_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<Guid>("PlayerId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("player_id");
-
-                    b.Property<string>("PwHash")
-                        .HasColumnType("text")
-                        .HasColumnName("pw_hash");
-
-                    b.Property<DateTime?>("VerifiedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("verified_at");
-
-                    b.HasKey("Provider", "Subject");
-
-                    b.HasIndex("PlayerId")
-                        .IsUnique()
-                        .HasDatabaseName("ux_player_identities_one_email")
-                        .HasFilter("provider = 1");
-
-                    b.ToTable("player_identities", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_player_identities_provider", "provider IN (0, 1, 2)");
-                        });
-                });
-
-            modelBuilder.Entity("server.Models.PlayerSession", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
-
-                    b.Property<DateTime>("IssuedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("issued_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<Guid>("PlayerId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("player_id");
-
-                    b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("revoked_at");
-
-                    b.Property<byte[]>("TokenHash")
-                        .IsRequired()
-                        .HasColumnType("bytea")
-                        .HasColumnName("token_hash");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PlayerId")
-                        .HasFilter("revoked_at IS NULL");
-
-                    b.HasIndex("TokenHash")
+                    b.HasIndex("DeviceId")
                         .IsUnique();
 
-                    b.ToTable("player_sessions", (string)null);
+                    b.ToTable("Players");
                 });
 
             modelBuilder.Entity("server.Models.TelemetryEvent", b =>
@@ -353,35 +225,6 @@ namespace server.Migrations
                         .IsRequired();
 
                     b.Navigation("Player");
-                });
-
-            modelBuilder.Entity("server.Models.PlayerEmailCode", b =>
-                {
-                    b.HasOne("server.Models.Player", null)
-                        .WithMany()
-                        .HasForeignKey("PlayerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("server.Models.PlayerIdentity", b =>
-                {
-                    b.HasOne("server.Models.Player", "Player")
-                        .WithMany()
-                        .HasForeignKey("PlayerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Player");
-                });
-
-            modelBuilder.Entity("server.Models.PlayerSession", b =>
-                {
-                    b.HasOne("server.Models.Player", null)
-                        .WithMany()
-                        .HasForeignKey("PlayerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("server.Models.TelemetryEvent", b =>

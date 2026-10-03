@@ -36,10 +36,28 @@ first start against an empty database.
       opaque session tokens stored only as SHA-256
 - [x] `/api/players`, `/api/characters` and `/api/events` guarded with
       `.RequireAdmin()`; `/api/admin/admins` restricted to the owner
-- [ ] **Player-facing auth does not exist.** The three data endpoints above are
-      admin-gated as a *stopgap* — they are meant to be publicly reachable with
-      their own auth: player credentials for players, and a server key for game
-      servers. No `server_keys` schema exists. This is what blocks items 7 and 8.
+- [x] Player auth (`server/PlayerAuth.cs`): `player_identities` (device /
+      email, steam reserved) and `player_sessions` tables, `POST
+      /api/players/register` (find-or-create by device ID, returns a Bearer
+      token), `POST /api/players/link/email` (adds email + password to the
+      current player) and `POST /api/players/login`. Public routes are
+      rate-limited and have their own Caddy `handle` blocks.
+- [x] Email verification (6-digit code, 15 min, 5 guesses) and password reset by
+      emailed code, via `IEmailSender` (`server/EmailSender.cs`; SMTP through
+      MailKit, or logged to the console when `SMTP_HOST` is unset)
+- [ ] **Configure a real SMTP server before relying on it.** Until `SMTP_*` is
+      set in `/var/lib/jenkins/hakutaku.env` on the VM, production only writes
+      the codes to the app log, and nobody gets an email. It also needs a sender
+      address that mail providers will accept, which a `nip.io` domain is not.
+- [ ] Unverified emails can still be claimed by someone else, blocking the real
+      owner; decide whether they should expire or be reclaimable. Also: no way
+      to change or unlink an email, and old sessions and codes are never deleted
+- [ ] **A player token only unlocks the email routes.** `/api/characters` and
+      `/api/events` are still admin-gated, and there is no player logout, no
+      session cleanup and no `player_bans`. No `server_keys` schema exists
+      either. This is what still blocks items 7 and 8.
+- [ ] Decide whether to move to the TDD's `bigint`/`entities` keys; the player
+      tables use `uuid` player ids to match `Players.Id`
 - [ ] Rename the data endpoints to singular (`/api/players` -> `/api/player`)
       when they go public
 

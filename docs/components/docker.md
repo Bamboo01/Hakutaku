@@ -84,6 +84,7 @@ Stage 2 does `COPY . .`, so without this the build context would include
 | Postgres ports | **none** | `127.0.0.1:5432:5432` |
 | App ports | `127.0.0.1:8090:8080` | `127.0.0.1:8090:8080` |
 | `HAKUTAKU_ADMIN_PASSWORD` | Forwarded to the app | **Not forwarded** |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Forwarded as `Smtp__*`; all optional | **Not forwarded** — emails are only logged |
 | `HAKUTAKU_DOCS_DOMAIN` | `docs.${HAKUTAKU_DOMAIN}` → its own certificate | `:5020` → plain HTTP |
 | Volumes | `pgdata`, `caddy_data`, `caddy_config` | `pgdata` |
 

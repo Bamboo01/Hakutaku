@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using server.Models;
@@ -12,9 +13,11 @@ using server.Models;
 namespace server.Migrations
 {
     [DbContext(typeof(Db))]
-    partial class DbModelSnapshot : ModelSnapshot
+    [Migration("20261003052600_AddPlayerIdentitiesAndSessions")]
+    partial class AddPlayerIdentitiesAndSessions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -162,56 +165,6 @@ namespace server.Migrations
                     b.ToTable("Players");
                 });
 
-            modelBuilder.Entity("server.Models.PlayerEmailCode", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
-
-                    b.Property<int>("Attempts")
-                        .HasColumnType("integer")
-                        .HasColumnName("attempts");
-
-                    b.Property<byte[]>("CodeHash")
-                        .IsRequired()
-                        .HasColumnType("bytea")
-                        .HasColumnName("code_hash");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
-
-                    b.Property<Guid>("PlayerId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("player_id");
-
-                    b.Property<short>("Purpose")
-                        .HasColumnType("smallint")
-                        .HasColumnName("purpose");
-
-                    b.Property<DateTime?>("UsedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("used_at");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PlayerId", "Purpose", "CreatedAt");
-
-                    b.ToTable("player_email_codes", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_player_email_codes_purpose", "purpose IN (0, 1)");
-                        });
-                });
-
             modelBuilder.Entity("server.Models.PlayerIdentity", b =>
                 {
                     b.Property<short>("Provider")
@@ -239,10 +192,6 @@ namespace server.Migrations
                     b.Property<string>("PwHash")
                         .HasColumnType("text")
                         .HasColumnName("pw_hash");
-
-                    b.Property<DateTime?>("VerifiedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("verified_at");
 
                     b.HasKey("Provider", "Subject");
 
@@ -353,15 +302,6 @@ namespace server.Migrations
                         .IsRequired();
 
                     b.Navigation("Player");
-                });
-
-            modelBuilder.Entity("server.Models.PlayerEmailCode", b =>
-                {
-                    b.HasOne("server.Models.Player", null)
-                        .WithMany()
-                        .HasForeignKey("PlayerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("server.Models.PlayerIdentity", b =>

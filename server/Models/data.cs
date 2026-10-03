@@ -4,11 +4,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace server.Models
 {
-    // Create a POD struct
+    // Create a POD struct. How a player proves who they are lives in
+    // PlayerIdentity (a device UUID, an email, ...), not on this row.
     public class Player
     {
         public Guid Id { get; set; }
-        public string DeviceId { get; set; } = "";
         public int Xp { get; set; }
     }
 
@@ -44,10 +44,61 @@ namespace server.Models
         public DbSet<TelemetryEvent> TelemetryEvents => Set<TelemetryEvent>();
         public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
         public DbSet<AdminSession> AdminSessions => Set<AdminSession>();
+        public DbSet<PlayerIdentity> PlayerIdentities => Set<PlayerIdentity>();
+        public DbSet<PlayerSession> PlayerSessions => Set<PlayerSession>();
+        public DbSet<PlayerEmailCode> PlayerEmailCodes => Set<PlayerEmailCode>();
 
-        // Admin tables follow the TDD conventions (bigint identity keys, snake_case names).
+        // The admin and player-auth tables follow the TDD conventions (snake_case names,
+        // bigint identity keys where a row has its own key).
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<PlayerIdentity>(e =>
+            {
+                e.ToTable("player_identities", t => t.HasCheckConstraint("ck_player_identities_provider", "provider IN (0, 1, 2)"));
+                // (provider, subject) is the key because one device, email or Steam account
+                // must map to at most one player -- and it makes find-or-create race-safe.
+                e.HasKey(x => new { x.Provider, x.Subject });
+                e.Property(x => x.PlayerId).HasColumnName("player_id");
+                e.Property(x => x.Provider).HasColumnName("provider");
+                e.Property(x => x.Subject).HasColumnName("subject");
+                e.Property(x => x.Email).HasColumnName("email");
+                e.Property(x => x.PwHash).HasColumnName("pw_hash");
+                e.Property(x => x.LinkedAt).HasColumnName("linked_at").HasDefaultValueSql("now()");
+                e.Property(x => x.VerifiedAt).HasColumnName("verified_at");
+                // At most one email per player, enforced here rather than only in the handler.
+                e.HasIndex(x => x.PlayerId).HasFilter("provider = 1").IsUnique().HasDatabaseName("ux_player_identities_one_email");
+                e.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.PlayerId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<PlayerSession>(e =>
+            {
+                e.ToTable("player_sessions");
+                e.Property(x => x.Id).HasColumnName("id").UseIdentityAlwaysColumn();
+                e.Property(x => x.PlayerId).HasColumnName("player_id");
+                e.Property(x => x.TokenHash).HasColumnName("token_hash");
+                e.Property(x => x.IssuedAt).HasColumnName("issued_at").HasDefaultValueSql("now()");
+                e.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+                e.Property(x => x.RevokedAt).HasColumnName("revoked_at");
+                e.HasIndex(x => x.TokenHash).IsUnique();
+                e.HasIndex(x => x.PlayerId).HasFilter("revoked_at IS NULL");
+                e.HasOne<Player>().WithMany().HasForeignKey(x => x.PlayerId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<PlayerEmailCode>(e =>
+            {
+                e.ToTable("player_email_codes", t => t.HasCheckConstraint("ck_player_email_codes_purpose", "purpose IN (0, 1)"));
+                e.Property(x => x.Id).HasColumnName("id").UseIdentityAlwaysColumn();
+                e.Property(x => x.PlayerId).HasColumnName("player_id");
+                e.Property(x => x.Purpose).HasColumnName("purpose");
+                e.Property(x => x.CodeHash).HasColumnName("code_hash");
+                e.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
+                e.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+                e.Property(x => x.Attempts).HasColumnName("attempts");
+                e.Property(x => x.UsedAt).HasColumnName("used_at");
+                e.HasIndex(x => new { x.PlayerId, x.Purpose, x.CreatedAt });
+                e.HasOne<Player>().WithMany().HasForeignKey(x => x.PlayerId).OnDelete(DeleteBehavior.Cascade);
+            });
+
             modelBuilder.Entity<AdminUser>(e =>
             {
                 e.ToTable("admin_users", t => t.HasCheckConstraint("ck_admin_users_role", "role IN (0, 1)"));
