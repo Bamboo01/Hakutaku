@@ -38,7 +38,8 @@ Two things follow from this, and both are intentional:
 |---|---|---|
 | `GET /Health` | **Yes** | `https://51.79.242.169.nip.io/Health` |
 | `POST /api/players/register`, `POST /api/players/login` | **Yes** | `https://51.79.242.169.nip.io/api/players/...` — rate-limited, each returns a player session token |
-| `POST /api/players/link/email` | **Yes** | `https://51.79.242.169.nip.io/api/players/link/email` — needs a player token |
+| `POST /api/players/link/email`, `email/verify`, `email/resend` | **Yes** | `https://51.79.242.169.nip.io/api/players/...` — need a player token; verify and resend are rate-limited |
+| `POST /api/players/password/forgot`, `password/reset` | **Yes** | `https://51.79.242.169.nip.io/api/players/password/...` — unauthenticated, rate-limited, tied to a mailed code |
 | The admin UI | No | SSH tunnel only |
 | `/api/admin/*` | No | SSH tunnel only |
 | `/api/players` (list/create), `/api/characters`, `/api/events` | No | SSH tunnel only, *and* admin-gated |
@@ -49,7 +50,7 @@ Two things follow from this, and both are intentional:
 So there are exactly **three** kinds of public surface, and each has a stated reason:
 
 - **`/Health`** — the Jenkins smoke test curls it over HTTPS after every deploy.
-- **The player-auth routes** (`register`, `login`, `link/email`) — a player has to be able to identify themselves before any other auth can exist. They are the only game-data paths with their own `handle` blocks in `caddy/Caddyfile`. `register` and `login` are rate-limited per IP; `link/email` is gated by a player session token.
+- **The player-auth routes** (`register`, `login`, `link/email`, the email verification pair and the password reset pair) — a player has to be able to identify themselves, and recover an account, before any other auth can exist. They are the only game-data paths with their own `handle` blocks in `caddy/Caddyfile`. Everything unauthenticated among them is rate-limited per IP; `link/email`, `email/verify` and `email/resend` are gated by a player session token.
 - **The wiki** — onboarding is useless if reading it requires an SSH tunnel.
 
 !!! warning "The wiki describes the system's internals"
@@ -68,8 +69,9 @@ session. It is there because the alternative was leaving them open to the
 internet while no player-facing auth exists.
 
 The player-auth routes are the first crack in that stopgap. A player can now
-register, link an email and log in, and gets a session token, but that token
-only unlocks `link/email`. Nothing else is any less locked down than before.
+register, link and verify an email, log in and reset a password, and gets a
+session token, but that token only unlocks the email routes. Nothing else is any
+less locked down than before.
 
 Two changes are planned and have not happened yet:
 

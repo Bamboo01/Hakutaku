@@ -221,6 +221,7 @@ inside a container. The double underscore is the nesting separator.
 |---|---|---|
 | `ConnectionStrings__Db` | `AddDbContext` | The Postgres connection string |
 | `HAKUTAKU_ADMIN_PASSWORD` | `SeedOwner` | First owner's password, first start only |
+| `Smtp__Host`, `Smtp__Port`, `Smtp__User`, `Smtp__Password`, `Smtp__From` | `SmtpEmailSender` | Outgoing mail for verification and reset codes. With no host set, `LogEmailSender` logs the message instead |
 | `ASPNETCORE_ENVIRONMENT` | The framework | `Development` loads the dev JSON |
 
 Dev ports come from `server/Properties/launchSettings.json`: `5008` for HTTP,

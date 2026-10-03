@@ -11,6 +11,7 @@ erDiagram
     Players ||--o{ TelemetryEvents : "emits"
     Players ||--o{ player_identities : "proves identity with"
     Players ||--o{ player_sessions : "has"
+    Players ||--o{ player_email_codes : "is mailed"
     admin_users ||--o{ admin_sessions : "has"
     admin_users ||--o{ admin_users : "created_by"
 
@@ -25,6 +26,7 @@ erDiagram
         text email
         text pw_hash
         timestamp linked_at
+        timestamp verified_at
     }
     player_sessions {
         bigint id PK
@@ -33,6 +35,16 @@ erDiagram
         timestamp issued_at
         timestamp expires_at
         timestamp revoked_at
+    }
+    player_email_codes {
+        bigint id PK
+        uuid player_id FK
+        smallint purpose
+        bytea code_hash
+        timestamp created_at
+        timestamp expires_at
+        int attempts
+        timestamp used_at
     }
     Characters {
         uuid Id PK
@@ -73,7 +85,7 @@ erDiagram
 
 | | Game data | Admin and player-auth data |
 |---|---|---|
-| Tables | `Players`, `Characters`, `TelemetryEvents` | `admin_users`, `admin_sessions`, `player_identities`, `player_sessions` |
+| Tables | `Players`, `Characters`, `TelemetryEvents` | `admin_users`, `admin_sessions`, `player_identities`, `player_sessions`, `player_email_codes` |
 | Naming | PascalCase (EF's default) | snake_case (configured explicitly) |
 | Primary key | `uuid`, generated client-side | `bigint` identity, or a composite key for `player_identities` |
 | Defined in | `server/Models/data.cs` | `server/Models/Admin.cs`, `server/Models/PlayerIdentity.cs` + `OnModelCreating` |
@@ -135,6 +147,11 @@ is one way to prove who they are.
   because it is PII. **`pw_hash`** is the Argon2id encoded string, email only.
 - Linking an email **adds** a row; the device identity stays, so the device keeps
   working.
+- **`verified_at`** is null until the player enters the mailed code. Only a
+  verified email can reset its password. Device identities never use it.
+- **`player_email_codes`** holds the codes mailed for verification (`purpose` 0)
+  and password reset (`1`). Only a hash of the code is stored, with a 15 minute
+  expiry, an attempt counter and a `used_at`.
 - **`player_sessions.token_hash`** is the SHA-256 of the session token, like the
   admin side. Sessions have one fixed expiry (30 days) and no idle timeout. Old
   rows are never cleaned up.
@@ -311,7 +328,7 @@ For production, swap in `-p hakutaku -f compose.yaml`.
 
 - **Player sessions pile up.** Every register or email login adds a
   `player_sessions` row and nothing deletes expired ones. Same story as
-  `admin_sessions`.
+  `admin_sessions`, and as `player_email_codes`.
 - **`TelemetryEvent.Data` is `text`**, so payloads are neither validated nor
   indexable without casting.
 - **A bad `playerId` returns a bare `500`**, not a clean `4xx` — the foreign-key

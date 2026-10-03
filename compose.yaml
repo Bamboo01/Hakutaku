@@ -10,6 +10,13 @@ services:
     environment:
       ConnectionStrings__Db: Host=postgres;Database=hakutaku;Username=hakutaku;Password=${POSTGRES_PASSWORD};SSL Mode=Disable
       HAKUTAKU_ADMIN_PASSWORD: ${HAKUTAKU_ADMIN_PASSWORD:-}
+      # Outgoing mail for verification and password-reset codes. All optional: with
+      # no SMTP_HOST the app logs each message instead of sending it (see .env.example).
+      Smtp__Host: ${SMTP_HOST:-}
+      Smtp__Port: ${SMTP_PORT:-587}
+      Smtp__User: ${SMTP_USER:-}
+      Smtp__Password: ${SMTP_PASSWORD:-}
+      Smtp__From: ${SMTP_FROM:-}
     ports:
       # Caddy on 443 stays the sole public entry point
       # Host port 8090 because Jenkins already holds 8080.

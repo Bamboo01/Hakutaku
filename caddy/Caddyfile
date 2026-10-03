@@ -20,6 +20,20 @@
 	handle /api/players/link/email {
 		reverse_proxy app:8080
 	}
+	# Email verification and password reset. verify and resend need a player token;
+	# forgot and reset are unauthenticated. All four share one rate limit per IP.
+	handle /api/players/email/verify {
+		reverse_proxy app:8080
+	}
+	handle /api/players/email/resend {
+		reverse_proxy app:8080
+	}
+	handle /api/players/password/forgot {
+		reverse_proxy app:8080
+	}
+	handle /api/players/password/reset {
+		reverse_proxy app:8080
+	}
 
 	handle {
 		respond 404

@@ -42,9 +42,17 @@ first start against an empty database.
       token), `POST /api/players/link/email` (adds email + password to the
       current player) and `POST /api/players/login`. Public routes are
       rate-limited and have their own Caddy `handle` blocks.
-- [ ] Email verification and password reset by email — neither exists, so an
-      email is unproven and a forgotten password is unrecoverable
-- [ ] **A player token only unlocks `link/email`.** `/api/characters` and
+- [x] Email verification (6-digit code, 15 min, 5 guesses) and password reset by
+      emailed code, via `IEmailSender` (`server/EmailSender.cs`; SMTP through
+      MailKit, or logged to the console when `SMTP_HOST` is unset)
+- [ ] **Configure a real SMTP server before relying on it.** Until `SMTP_*` is
+      set in `/var/lib/jenkins/hakutaku.env` on the VM, production only writes
+      the codes to the app log, and nobody gets an email. It also needs a sender
+      address that mail providers will accept, which a `nip.io` domain is not.
+- [ ] Unverified emails can still be claimed by someone else, blocking the real
+      owner; decide whether they should expire or be reclaimable. Also: no way
+      to change or unlink an email, and old sessions and codes are never deleted
+- [ ] **A player token only unlocks the email routes.** `/api/characters` and
       `/api/events` are still admin-gated, and there is no player logout, no
       session cleanup and no `player_bans`. No `server_keys` schema exists
       either. This is what still blocks items 7 and 8.

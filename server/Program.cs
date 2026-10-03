@@ -16,6 +16,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<server.Models.Db>(o =>
     o.UseNpgsql(builder.Configuration.GetConnectionString("Db")));
 
+// Real mail only when an SMTP host is configured; otherwise messages are just logged.
+if (string.IsNullOrWhiteSpace(builder.Configuration["Smtp:Host"]))
+    builder.Services.AddSingleton<IEmailSender, LogEmailSender>();
+else
+    builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+
 // Behind Caddy every request would otherwise appear to come from Caddy itself, which would make
 // the per-IP login limit and the session IP useless. Only Caddy can reach this container in
 // production (compose.yaml publishes no port for it), so its forwarded headers are trusted.
@@ -40,6 +46,11 @@ builder.Services.AddRateLimiter(o =>
     // Email login is public too, and each attempt costs an Argon2 hash, so it gets the
     // same per-IP limit as admin login. Separate policy so one doesn't use up the other.
     o.AddPolicy("player-login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
+    // The mail routes (verify, resend, forgot, reset). Each one either sends an email or
+    // lets someone guess a code, so they share one per-IP limit, apart from login's.
+    o.AddPolicy("player-mail", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
 });

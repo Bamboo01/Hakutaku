@@ -9,6 +9,9 @@ namespace server
     public record PlayerRegisterRequest(string? DeviceId);
     public record PlayerEmailRequest(string? Email, string? Password);
     public record AdminCreatePlayerRequest(string? DeviceId, int Xp);
+    public record PlayerCodeRequest(string? Code);
+    public record PlayerForgotRequest(string? Email);
+    public record PlayerResetRequest(string? Email, string? Code, string? NewPassword);
 
     // Player-facing auth. Public routes, so each one is rate limited and has its own
     // handle block in caddy/Caddyfile. Sessions are a Bearer token rather than a
@@ -76,6 +79,85 @@ namespace server
             return email.Any(char.IsWhiteSpace) ? null : email;
         }
 
+        const int CodeMinutes = 15;
+        // Six digits is only a million guesses, so a code dies after this many wrong tries.
+        const int MaxCodeAttempts = 5;
+        // Minimum gap between mails to one player for the same purpose, so the endpoints
+        // can't be used to flood someone's inbox.
+        const int ResendSeconds = 60;
+
+        static byte[] HashCode(Guid playerId, EmailCodePurpose purpose, string code) =>
+            AdminAuth.HashToken($"{playerId}:{(short)purpose}:{code}");
+
+        static bool LooksLikeCode(string? code) =>
+            code is { Length: 6 } && code.All(char.IsAsciiDigit);
+
+        // Makes a fresh code and retires any older unused one. Returns null, creating
+        // nothing, if one was already made in the last ResendSeconds.
+        static async Task<string?> CreateCode(Db db, Guid playerId, EmailCodePurpose purpose)
+        {
+            var now = DateTime.UtcNow;
+            var cooldownStart = now.AddSeconds(-ResendSeconds);
+            if (await db.PlayerEmailCodes.AnyAsync(c => c.PlayerId == playerId && c.Purpose == purpose && c.CreatedAt > cooldownStart))
+                return null;
+
+            await db.PlayerEmailCodes
+                .Where(c => c.PlayerId == playerId && c.Purpose == purpose && c.UsedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.UsedAt, now));
+
+            var code = RandomNumberGenerator.GetInt32(1_000_000).ToString("D6");
+            db.PlayerEmailCodes.Add(new PlayerEmailCode
+            {
+                PlayerId = playerId,
+                Purpose = purpose,
+                CodeHash = HashCode(playerId, purpose, code),
+                ExpiresAt = now.AddMinutes(CodeMinutes),
+            });
+            await db.SaveChangesAsync();
+            return code;
+        }
+
+        // Checks a submitted code against the player's newest live one and uses it up if
+        // it matches. The attempt is counted first, in the database, so parallel guesses
+        // can't get past the cap, and only one request can ever redeem a code.
+        static async Task<bool> RedeemCode(Db db, Guid playerId, EmailCodePurpose purpose, string submitted)
+        {
+            var now = DateTime.UtcNow;
+            var entry = await db.PlayerEmailCodes
+                .Where(c => c.PlayerId == playerId && c.Purpose == purpose
+                    && c.UsedAt == null && c.ExpiresAt > now && c.Attempts < MaxCodeAttempts)
+                .OrderByDescending(c => c.CreatedAt)
+                .FirstOrDefaultAsync();
+            if (entry is null) return false;
+
+            var counted = await db.PlayerEmailCodes
+                .Where(c => c.Id == entry.Id && c.Attempts < MaxCodeAttempts)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.Attempts, c => c.Attempts + 1));
+            if (counted == 0) return false;
+
+            if (!CryptographicOperations.FixedTimeEquals(entry.CodeHash, HashCode(playerId, purpose, submitted)))
+                return false;
+
+            var used = await db.PlayerEmailCodes
+                .Where(c => c.Id == entry.Id && c.UsedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.UsedAt, now));
+            return used == 1;
+        }
+
+        static Task SendCodeMail(IEmailSender mail, string to, EmailCodePurpose purpose, string code)
+        {
+            var (subject, what) = purpose == EmailCodePurpose.Verify
+                ? ("Verify your email", "verify your email address")
+                : ("Reset your password", "reset your password");
+            return mail.SendAsync(to, $"Hakutaku: {subject}",
+                $"Your code to {what} is {code}.\n\nIt expires in {CodeMinutes} minutes. " +
+                "If you didn't ask for this, ignore this email; nothing changes unless the code is entered.");
+        }
+
+        // The email identity of the player a Bearer token belongs to, or null.
+        static Task<PlayerIdentity?> FindEmailIdentity(Db db, Guid playerId) =>
+            db.PlayerIdentities.FirstOrDefaultAsync(i => i.PlayerId == playerId && i.Provider == PlayerProvider.Email);
+
         public static void MapPlayerEndpoints(this WebApplication app)
         {
             // Find-or-create by device ID, then start a session. The device UUID is made by
@@ -121,7 +203,7 @@ namespace server
             // never replaces it. Deliberately not rate limited: it is gated by a session,
             // and the cheap existence checks run before Argon2, so the expensive hash
             // happens at most once per session.
-            app.MapPost("/api/players/link/email", async (Db db, HttpContext http, PlayerEmailRequest request) =>
+            app.MapPost("/api/players/link/email", async (Db db, HttpContext http, IEmailSender mail, ILoggerFactory logs, PlayerEmailRequest request) =>
             {
                 var player = await FindBySession(db, http);
                 if (player is null)
@@ -160,8 +242,132 @@ namespace server
                         statusCode: StatusCodes.Status409Conflict);
                 }
 
-                return Results.Ok(new { provider = ProviderName(PlayerProvider.Email), email });
+                // The link is already saved, so a mail failure must not undo it; the player
+                // can ask for another code with /email/resend.
+                var sent = false;
+                try
+                {
+                    var code = await CreateCode(db, player.Id, EmailCodePurpose.Verify);
+                    if (code is not null)
+                    {
+                        await SendCodeMail(mail, email, EmailCodePurpose.Verify, code);
+                        sent = true;
+                    }
+                }
+                catch (Exception e)
+                {
+                    logs.CreateLogger("PlayerAuth").LogError(e, "Could not send the verification email");
+                }
+
+                return Results.Ok(new { provider = ProviderName(PlayerProvider.Email), email, verified = false, verificationSent = sent });
             });
+
+            // Needs the player token. Redeems the code mailed by link/email or /email/resend.
+            app.MapPost("/api/players/email/verify", async (Db db, HttpContext http, PlayerCodeRequest request) =>
+            {
+                var player = await FindBySession(db, http);
+                if (player is null)
+                    return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
+
+                var identity = await FindEmailIdentity(db, player.Id);
+                if (identity is null)
+                    return Results.BadRequest(new { error = "no email is linked to this player" });
+                if (identity.VerifiedAt is not null)
+                    return Results.Ok(new { verified = true });
+
+                var code = request.Code?.Trim();
+                if (!LooksLikeCode(code) || !await RedeemCode(db, player.Id, EmailCodePurpose.Verify, code!))
+                    return Results.BadRequest(new { error = "invalid or expired code" });
+
+                var now = DateTime.UtcNow;
+                await db.PlayerIdentities
+                    .Where(i => i.PlayerId == player.Id && i.Provider == PlayerProvider.Email)
+                    .ExecuteUpdateAsync(s => s.SetProperty(i => i.VerifiedAt, now));
+                return Results.Ok(new { verified = true });
+            }).RequireRateLimiting("player-mail");
+
+            // Needs the player token. Mails a new code, at most once a minute per player.
+            app.MapPost("/api/players/email/resend", async (Db db, HttpContext http, IEmailSender mail, ILoggerFactory logs) =>
+            {
+                var player = await FindBySession(db, http);
+                if (player is null)
+                    return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
+
+                var identity = await FindEmailIdentity(db, player.Id);
+                if (identity is null)
+                    return Results.BadRequest(new { error = "no email is linked to this player" });
+                if (identity.VerifiedAt is not null)
+                    return Results.Json(new { error = "email is already verified" }, statusCode: StatusCodes.Status409Conflict);
+
+                var code = await CreateCode(db, player.Id, EmailCodePurpose.Verify);
+                if (code is null)
+                    return Results.Json(new { error = $"wait {ResendSeconds} seconds between codes" }, statusCode: StatusCodes.Status429TooManyRequests);
+
+                try
+                {
+                    await SendCodeMail(mail, identity.Email!, EmailCodePurpose.Verify, code);
+                }
+                catch (Exception e)
+                {
+                    logs.CreateLogger("PlayerAuth").LogError(e, "Could not send the verification email");
+                    return Results.Json(new { error = "could not send the email, try again later" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+                }
+                return Results.Ok(new { sent = true });
+            }).RequireRateLimiting("player-mail");
+
+            // Always the same answer, whether or not the email is known and verified, so it
+            // can't be used to find out which emails have accounts. The mail goes out in the
+            // background so a hit doesn't take noticeably longer than a miss.
+            app.MapPost("/api/players/password/forgot", async (Db db, IEmailSender mail, ILoggerFactory logs, PlayerForgotRequest request) =>
+            {
+                var email = NormalizeEmail(request.Email);
+                if (email is null)
+                    return Results.BadRequest(new { error = "a valid email is required" });
+
+                var identity = await db.PlayerIdentities.FirstOrDefaultAsync(i =>
+                    i.Provider == PlayerProvider.Email && i.Subject == email && i.VerifiedAt != null);
+                if (identity is not null)
+                {
+                    var code = await CreateCode(db, identity.PlayerId, EmailCodePurpose.Reset);
+                    if (code is not null)
+                    {
+                        var log = logs.CreateLogger("PlayerAuth");
+                        _ = Task.Run(async () =>
+                        {
+                            try { await SendCodeMail(mail, email, EmailCodePurpose.Reset, code); }
+                            catch (Exception e) { log.LogError(e, "Could not send the password reset email"); }
+                        });
+                    }
+                }
+                return Results.Ok(new { ok = true });
+            }).RequireRateLimiting("player-mail");
+
+            // Sets a new password if the code mailed by /password/forgot is right. Every
+            // session the player has is revoked, since a reset usually means something
+            // went wrong; they sign in again (the device ID also still works).
+            app.MapPost("/api/players/password/reset", async (Db db, PlayerResetRequest request) =>
+            {
+                var email = NormalizeEmail(request.Email);
+                var code = request.Code?.Trim();
+                if (email is null || string.IsNullOrEmpty(request.NewPassword)
+                    || request.NewPassword.Length < 8 || request.NewPassword.Length > 256)
+                    return Results.BadRequest(new { error = "a valid email is required and the new password must be 8-256 characters" });
+
+                var identity = await db.PlayerIdentities.FirstOrDefaultAsync(i =>
+                    i.Provider == PlayerProvider.Email && i.Subject == email && i.VerifiedAt != null);
+                if (identity is null || !LooksLikeCode(code) || !await RedeemCode(db, identity.PlayerId, EmailCodePurpose.Reset, code!))
+                    return Results.BadRequest(new { error = "invalid or expired code" });
+
+                var hash = AdminAuth.HashPassword(request.NewPassword);
+                var now = DateTime.UtcNow;
+                await db.PlayerIdentities
+                    .Where(i => i.PlayerId == identity.PlayerId && i.Provider == PlayerProvider.Email)
+                    .ExecuteUpdateAsync(s => s.SetProperty(i => i.PwHash, hash));
+                await db.PlayerSessions
+                    .Where(s => s.PlayerId == identity.PlayerId && s.RevokedAt == null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now));
+                return Results.Ok(new { ok = true });
+            }).RequireRateLimiting("player-mail");
 
             // Same answer for an unknown email and a wrong password, and an unknown email
             // still pays for a hash check, so neither the body nor the timing reveals

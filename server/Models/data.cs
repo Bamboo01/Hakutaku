@@ -46,6 +46,7 @@ namespace server.Models
         public DbSet<AdminSession> AdminSessions => Set<AdminSession>();
         public DbSet<PlayerIdentity> PlayerIdentities => Set<PlayerIdentity>();
         public DbSet<PlayerSession> PlayerSessions => Set<PlayerSession>();
+        public DbSet<PlayerEmailCode> PlayerEmailCodes => Set<PlayerEmailCode>();
 
         // The admin and player-auth tables follow the TDD conventions (snake_case names,
         // bigint identity keys where a row has its own key).
@@ -63,6 +64,7 @@ namespace server.Models
                 e.Property(x => x.Email).HasColumnName("email");
                 e.Property(x => x.PwHash).HasColumnName("pw_hash");
                 e.Property(x => x.LinkedAt).HasColumnName("linked_at").HasDefaultValueSql("now()");
+                e.Property(x => x.VerifiedAt).HasColumnName("verified_at");
                 // At most one email per player, enforced here rather than only in the handler.
                 e.HasIndex(x => x.PlayerId).HasFilter("provider = 1").IsUnique().HasDatabaseName("ux_player_identities_one_email");
                 e.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.PlayerId).OnDelete(DeleteBehavior.Cascade);
@@ -79,6 +81,21 @@ namespace server.Models
                 e.Property(x => x.RevokedAt).HasColumnName("revoked_at");
                 e.HasIndex(x => x.TokenHash).IsUnique();
                 e.HasIndex(x => x.PlayerId).HasFilter("revoked_at IS NULL");
+                e.HasOne<Player>().WithMany().HasForeignKey(x => x.PlayerId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<PlayerEmailCode>(e =>
+            {
+                e.ToTable("player_email_codes", t => t.HasCheckConstraint("ck_player_email_codes_purpose", "purpose IN (0, 1)"));
+                e.Property(x => x.Id).HasColumnName("id").UseIdentityAlwaysColumn();
+                e.Property(x => x.PlayerId).HasColumnName("player_id");
+                e.Property(x => x.Purpose).HasColumnName("purpose");
+                e.Property(x => x.CodeHash).HasColumnName("code_hash");
+                e.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
+                e.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+                e.Property(x => x.Attempts).HasColumnName("attempts");
+                e.Property(x => x.UsedAt).HasColumnName("used_at");
+                e.HasIndex(x => new { x.PlayerId, x.Purpose, x.CreatedAt });
                 e.HasOne<Player>().WithMany().HasForeignKey(x => x.PlayerId).OnDelete(DeleteBehavior.Cascade);
             });
 
