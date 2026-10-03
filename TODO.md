@@ -36,17 +36,20 @@ first start against an empty database.
       opaque session tokens stored only as SHA-256
 - [x] `/api/players`, `/api/characters` and `/api/events` guarded with
       `.RequireAdmin()`; `/api/admin/admins` restricted to the owner
-- [x] `POST /api/players/register` — public, rate-limited, find-or-create a
-      player by `deviceId` (unique index at the DB level, so a race can't
-      create duplicates). Caddy has a dedicated `handle` block for it. No
-      session is issued; this only proves a device exists as a player.
-- [ ] **A real player session doesn't exist yet.** Registering doesn't log you
-      in to anything — there's no player token/cookie, and the rest of
-      `/api/players` plus all of `/api/characters` and `/api/events` are still
-      admin-gated. The TDD's full design (`player_identities` for
-      email/Steam linking, `player_sessions`, `player_bans`) is a separate,
-      bigger milestone past this. No `server_keys` schema exists either. This
-      is what blocks items 7 and 8.
+- [x] Player auth (`server/PlayerAuth.cs`): `player_identities` (device /
+      email, steam reserved) and `player_sessions` tables, `POST
+      /api/players/register` (find-or-create by device ID, returns a Bearer
+      token), `POST /api/players/link/email` (adds email + password to the
+      current player) and `POST /api/players/login`. Public routes are
+      rate-limited and have their own Caddy `handle` blocks.
+- [ ] Email verification and password reset by email — neither exists, so an
+      email is unproven and a forgotten password is unrecoverable
+- [ ] **A player token only unlocks `link/email`.** `/api/characters` and
+      `/api/events` are still admin-gated, and there is no player logout, no
+      session cleanup and no `player_bans`. No `server_keys` schema exists
+      either. This is what still blocks items 7 and 8.
+- [ ] Decide whether to move to the TDD's `bigint`/`entities` keys; the player
+      tables use `uuid` player ids to match `Players.Id`
 - [ ] Rename the data endpoints to singular (`/api/players` -> `/api/player`)
       when they go public
 

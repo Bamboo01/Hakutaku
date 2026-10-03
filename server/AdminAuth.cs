@@ -30,15 +30,16 @@ namespace server
         const int HashLength = 32;
 
         // Checked against when the username is unknown, so a miss takes as long as a wrong password.
-        static readonly string DummyHash = HashPassword("dummy-password-for-timing");
+        // internal: player email login (PlayerAuth.cs) shares the hashing and token helpers.
+        internal static readonly string DummyHash = HashPassword("dummy-password-for-timing");
 
         public static string HashPassword(string password) =>
             Argon2.Hash(password, TimeCost, MemoryCostKib, Lanes, Argon2Type.HybridAddressing, HashLength);
 
-        static bool VerifyPassword(string encodedHash, string password) =>
+        internal static bool VerifyPassword(string encodedHash, string password) =>
             Argon2.Verify(encodedHash, password);
 
-        static byte[] HashToken(string token) =>
+        internal static byte[] HashToken(string token) =>
             SHA256.HashData(Encoding.UTF8.GetBytes(token));
 
         static IPAddress? Normalize(IPAddress? ip) =>

@@ -32,20 +32,24 @@ Two things are bought with that hop:
 ```caddyfile
 {$HAKUTAKU_DOMAIN} {
 
-	# The API is tunnel-only
-	# Nothing under /api has a public access point yet!!
-	# The current endpoints are all admin-gated, and a session cookie can only be minted
-	# through when logging in through SSH tunnel (see the readme).
-	# 404 rather than 403 so this doesn't confirm the routes exist.
-	# Narrow this to /api/admin/* once players and game servers need public access.
-	# handle /api/* {
-	#	respond 404
-	#}
-
-	# Default-deny: only what's named here is public. The admin UI and its API
-	# live behind the SSH tunnel (see the readme), which bypasses Caddy entirely.
-	# Add a handle block per public route when players and game servers land.
+	# Default-deny: only what's named here is public. The admin UI and the rest
+	# of /api live behind the SSH tunnel (see the readme), which bypasses Caddy
+	# entirely. Add a handle block per public route as more of them land.
 	handle /Health {
+		reverse_proxy app:8080
+	}
+
+	# The public player-auth routes (server/PlayerAuth.cs). register and login are
+	# unauthenticated and rate-limited on the app side; link/email needs a player
+	# session token. Everything else under /api stays tunnel-only until the rest
+	# of the player API exists (see TODO.md item 2).
+	handle /api/players/register {
+		reverse_proxy app:8080
+	}
+	handle /api/players/login {
+		reverse_proxy app:8080
+	}
+	handle /api/players/link/email {
 		reverse_proxy app:8080
 	}
 
@@ -64,14 +68,10 @@ Two things are bought with that hop:
 }
 ```
 
-That is the entire public surface of the project: **one route on the main
-domain, plus the wiki on its own subdomain**.
-
-!!! info "The commented-out block is a kept placeholder"
-    It is not dead code someone forgot. It is the shape of the rule that will be
-    needed once game-server and player endpoints go public — at that point the
-    public API needs explicit handling, and `/api/admin/*` specifically needs to
-    stay denied. Left in place as the reference for whoever writes it.
+That is the entire public surface of the project: **`/Health` and the three
+player-auth routes on the main domain, plus the wiki on its own subdomain**.
+Each `handle` matches one exact path, so a route that is not listed gets the
+`404` catch-all even if the app has it.
 
 ### Reading it line by line
 
@@ -94,7 +94,8 @@ between dev and production TLS:
 A bare `:80` can **never** get HTTPS, because Let's Encrypt only issues
 certificates for domain names — not for ports, `localhost`, or bare IPs.
 
-**`handle /Health { reverse_proxy app:8080 }`** — the one public route.
+**`handle /Health { reverse_proxy app:8080 }`** — the first public route. The
+player-auth `handle` blocks have the same shape.
 `app:8080` is Docker network DNS: `app` is the service name in the compose file,
 `8080` the port the container listens on.
 

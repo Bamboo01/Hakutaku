@@ -32,9 +32,14 @@ builder.Services.AddRateLimiter(o =>
     o.AddPolicy("admin-login", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
-    // Public and unauthenticated (see the registration endpoint below), so this is the
-    // only thing standing between it and someone hammering it to fill the table.
+    // Public and unauthenticated (see PlayerAuth.cs), so this is the only thing standing
+    // between registration and someone hammering it to fill the table.
     o.AddPolicy("player-register", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
+    // Email login is public too, and each attempt costs an Argon2 hash, so it gets the
+    // same per-IP limit as admin login. Separate policy so one doesn't use up the other.
+    o.AddPolicy("player-login", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
 });
@@ -58,44 +63,59 @@ app.UseRateLimiter();
 // NOTE: do not map "/" to an endpoint. Static-file middleware skips any request
 // that already matched an endpoint, so a route here shadows the Vue UI below.
 app.MapGet("/Health", () => Results.Ok( new { health = "ok" } ));
-// Public, find-or-create by device ID. This is intentionally the *only* public
-// game-data endpoint -- caddy/Caddyfile has a handle block for it specifically.
-// No session/token is issued; that's a separate, bigger piece (see TODO.md item 5)
-// closer to the TDD's player_identities/player_sessions design. For now this is
-// just "does a player for this device exist yet," which is what was asked for.
-app.MapPost("/api/players/register", async (server.Models.Db db, PlayerRegisterRequest request) =>
+// The public player routes (register, link/email, login) are in PlayerAuth.cs.
+// caddy/Caddyfile has a handle block for each; nothing else here is public.
+app.MapPlayerEndpoints();
+
+// Admin-or-owner only. Players can now log in, but a player session doesn't unlock
+// these yet -- they are the admin's view, not the player API.
+// Lists only which providers each player has linked, never the device IDs or emails:
+// a device ID works like a password, so it shouldn't show up in an admin listing.
+app.MapGet("/api/players", async (server.Models.Db db) =>
 {
-    if (string.IsNullOrWhiteSpace(request.DeviceId) || request.DeviceId.Length > 254)
-        return Results.BadRequest(new { error = "deviceId is required" });
+    var players = await db.Players
+        .OrderBy(p => p.Id)
+        .Select(p => new
+        {
+            id = p.Id,
+            xp = p.Xp,
+            providers = db.PlayerIdentities.Where(i => i.PlayerId == p.Id).Select(i => i.Provider).ToList(),
+        })
+        .ToListAsync();
+    return Results.Ok(players.Select(p => new
+    {
+        p.id,
+        p.xp,
+        providers = p.providers.Select(PlayerAuth.ProviderName).Order().ToList(),
+    }));
+}).RequireAdmin();
+// Admin-created players get a device identity only if a deviceId is given, so a
+// player made this way can't log in until they have one.
+app.MapPost("/api/players", async (server.Models.Db db, AdminCreatePlayerRequest request) =>
+{
+    var deviceId = request.DeviceId?.Trim();
+    if (deviceId is not null && (deviceId.Length == 0 || deviceId.Length > 254))
+        return Results.BadRequest(new { error = "deviceId must be 1-254 characters when given" });
 
-    var deviceId = request.DeviceId.Trim();
-    var existing = await db.Players.FirstOrDefaultAsync(p => p.DeviceId == deviceId);
-    if (existing is not null) return Results.Ok(existing);
-
-    var player = new server.Models.Player { DeviceId = deviceId, Xp = 0 };
+    var player = new server.Models.Player { Xp = request.Xp };
     db.Players.Add(player);
+    if (deviceId is not null)
+        db.PlayerIdentities.Add(new server.Models.PlayerIdentity
+        {
+            Player = player,
+            Provider = server.Models.PlayerProvider.Device,
+            Subject = deviceId,
+        });
+
     try
     {
         await db.SaveChangesAsync();
     }
     catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" })
     {
-        // Lost a race with another registration for the same device between the
-        // lookup above and this save -- fetch whichever row actually won.
-        return Results.Ok(await db.Players.FirstAsync(p => p.DeviceId == deviceId));
+        return Results.Json(new { error = "a player with that deviceId already exists" }, statusCode: StatusCodes.Status409Conflict);
     }
-    return Results.Ok(player);
-}).RequireRateLimiting("player-register");
-
-// Admin-or-owner only for now -- there's no separate player-facing auth yet,
-// so this is the only thing standing between these endpoints and the public
-// internet. See TODO.md for the planned player login.
-app.MapGet("/api/players", async (server.Models.Db db) => await db.Players.ToListAsync()).RequireAdmin();
-app.MapPost("/api/players", async (server.Models.Db db, server.Models.Player p) =>
-{
-    db.Players.Add(p);
-    await db.SaveChangesAsync();
-    return Results.Ok(p);
+    return Results.Ok(new { id = player.Id, xp = player.Xp });
 }).RequireAdmin();
 
 app.MapGet("/api/characters", async (server.Models.Db db) => await db.Characters.ToListAsync()).RequireAdmin();
@@ -127,5 +147,3 @@ app.UseStaticFiles();
 app.MapFallbackToFile("index.html");
 
 app.Run();
-
-record PlayerRegisterRequest(string? DeviceId);

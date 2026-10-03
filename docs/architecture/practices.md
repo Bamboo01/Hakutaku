@@ -37,7 +37,8 @@ Two things follow from this, and both are intentional:
 | Surface | Public? | Reachable how |
 |---|---|---|
 | `GET /Health` | **Yes** | `https://51.79.242.169.nip.io/Health` |
-| `POST /api/players/register` | **Yes** | `https://51.79.242.169.nip.io/api/players/register` — rate-limited, no session issued |
+| `POST /api/players/register`, `POST /api/players/login` | **Yes** | `https://51.79.242.169.nip.io/api/players/...` — rate-limited, each returns a player session token |
+| `POST /api/players/link/email` | **Yes** | `https://51.79.242.169.nip.io/api/players/link/email` — needs a player token |
 | The admin UI | No | SSH tunnel only |
 | `/api/admin/*` | No | SSH tunnel only |
 | `/api/players` (list/create), `/api/characters`, `/api/events` | No | SSH tunnel only, *and* admin-gated |
@@ -45,10 +46,10 @@ Two things follow from this, and both are intentional:
 | Jenkins | No | SSH tunnel on a separate port |
 | **This wiki** | **Yes** | `https://docs.51.79.242.169.nip.io` |
 
-So there are exactly **three** public surfaces, and each has a stated reason:
+So there are exactly **three** kinds of public surface, and each has a stated reason:
 
 - **`/Health`** — the Jenkins smoke test curls it over HTTPS after every deploy.
-- **`POST /api/players/register`** — a device needs to be identifiable before any auth can exist for it; this is deliberately the one game-data path with its own `handle` block in `caddy/Caddyfile`, rate-limited rather than gated.
+- **The player-auth routes** (`register`, `login`, `link/email`) — a player has to be able to identify themselves before any other auth can exist. They are the only game-data paths with their own `handle` blocks in `caddy/Caddyfile`. `register` and `login` are rate-limited per IP; `link/email` is gated by a player session token.
 - **The wiki** — onboarding is useless if reading it requires an SSH tunnel.
 
 !!! warning "The wiki describes the system's internals"
@@ -66,9 +67,9 @@ end state — game servers and players are meant to reach them without an admin
 session. It is there because the alternative was leaving them open to the
 internet while no player-facing auth exists.
 
-`POST /api/players/register` is the first crack in that stopgap: public, but
-it only proves a device exists as a player. It issues no session, so nothing
-past that one call is any less locked down than before.
+The player-auth routes are the first crack in that stopgap. A player can now
+register, link an email and log in, and gets a session token, but that token
+only unlocks `link/email`. Nothing else is any less locked down than before.
 
 Two changes are planned and have not happened yet:
 

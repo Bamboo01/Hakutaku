@@ -7,10 +7,17 @@
 		reverse_proxy app:8080
 	}
 
-	# The one public game-data route: public, unauthenticated, rate-limited on
-	# the app side. Everything else under /api stays tunnel-only until real
-	# player/server auth exists (see TODO.md item 5).
+	# The public player-auth routes (server/PlayerAuth.cs). register and login are
+	# unauthenticated and rate-limited on the app side; link/email needs a player
+	# session token. Everything else under /api stays tunnel-only until the rest
+	# of the player API exists (see TODO.md item 2).
 	handle /api/players/register {
+		reverse_proxy app:8080
+	}
+	handle /api/players/login {
+		reverse_proxy app:8080
+	}
+	handle /api/players/link/email {
 		reverse_proxy app:8080
 	}
 
