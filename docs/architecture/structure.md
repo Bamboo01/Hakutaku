@@ -31,8 +31,8 @@ Hakutaku/
 ├── Jenkinsfile              Deploy + smoke test on merge to master
 ├── docs/                    This wiki
 │
-├── sdk/                     Placeholder — see SDK
-└── simulator/               Placeholder — see Simulator
+├── sdk/                     PlayFab-style C# client library (netstandard2.1, for Unity)
+└── simulator/               .NET console app: mock players, through the SDK
 ```
 
 ## Tech stack, and why each piece

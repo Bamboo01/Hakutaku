@@ -1,92 +1,145 @@
 # Simulator
 
-!!! info "Stub — no code exists yet"
-    `simulator/` contains only a `.gitkeep`. This page records what it is
-    *for*, so whoever picks it up does not have to reconstruct the intent.
+A .NET 10 console app in `simulator/` that makes **mock players** and has them
+call the server through the [SDK](sdk.md), exactly the way the Unity plugin
+will. It does two jobs:
 
-## What it is meant to be
+- **`probe`**, a scripted run that checks the server still behaves as
+  documented. It registers players, takes one through the account flows, and
+  has every player try each route beyond player auth. It exits `1` if anything
+  answered differently from what it should.
+- **`shell`**, an interactive prompt for poking at the API by hand as one or
+  more mock players. This is the only way to finish the email-verification and
+  password-reset flows, because they need the emailed code.
 
-A **C++ telemetry ingestion service**: the thing that takes event streams from
-game servers and gets them into Hakutaku.
+!!! note "Not the C++ ingestion service"
+    This directory was once earmarked for the C++ telemetry ingestion service.
+    That plan now has its own page, [Telemetry ingestion](ingestion.md).
 
-It is tracked as `TODO.md` item 7 and explicitly scoped as a **stretch goal**,
-not part of the core backend. It should not block anything else.
+## Running it
 
-## The decision that has not been made
+It needs a running server. The [local dev loop](../setup.md) is enough:
+Postgres in Docker, then `dotnet watch` in `server/`.
 
-There are two ways to get telemetry into the database, and the choice has real
-consequences:
-
-=== "POST to `/api/events`"
-
-    **One source of truth.** Validation, timestamping and the schema all stay in
-    the ASP.NET app. The simulator only has to speak HTTP and JSON.
-
-    Slower per event — HTTP overhead, plus whatever the server does — and it
-    makes the API a hard dependency of ingestion.
-
-=== "Write straight to Postgres"
-
-    **Faster**, and ingestion survives the API being down.
-
-    But it duplicates validation logic in a second language, and every schema
-    change now has two places to update. Nothing stops the two from drifting
-    apart.
-
-The current lean in `TODO.md` is toward the API, for the single-source-of-truth
-reason. Not decided.
-
-## What has to exist first
-
-### 1. A stable event contract
-
-`POST /api/events` exists and works today. Its shape:
-
-```json
-{
-  "playerId": "<guid of an existing player>",
-  "eventType": "level_up",
-  "data": "{\"level\":2}"
-}
+```bash
+cd simulator
+dotnet run -- probe                    # 3 mock players against http://localhost:5008
+dotnet run -- probe --players 10
+dotnet run -- shell
+dotnet run -- probe --url http://localhost:8090   # full Docker stack, or prod over the SSH tunnel
 ```
 
-`timestamp` is always set server-side in UTC; anything a client sends is
-overwritten. `data` is JSON held as **text**, not `jsonb`.
+`--url` defaults to `$HAKUTAKU_URL` if that is set, otherwise
+`http://localhost:5008`.
 
-See the [API reference](../reference/api.md).
+## What `probe` checks
 
-### 2. Non-admin authentication
+| Step | Expected |
+|---|---|
+| Register N guests, each with a display name | `200` each, a new player id, the name it asked for, and a device token |
+| Player 1 logs in with its device token | `200`, **the same** player id |
+| A made-up device token | `401` |
+| Register player 1's hardware ID again | `200`, a **different** player: the hardware ID is only recorded |
+| An old client's `register` body (`deviceId`, no `hardwareId`) | `400` |
+| Rename player 1 (with padding spaces) | `200`, stored trimmed |
+| Player 2 takes player 1's name | `200`, since names aren't unique |
+| Names too short, too long, or with a control character | `400` each |
+| Link an email to player 1 | `200`, unverified |
+| Link a second email to player 1 | `409` |
+| Player 2 links player 1's email | `409` |
+| Player 1's device token, with the email linked but not verified | `200`: it's only removed at verification |
+| Verify with a wrong code | `400` |
+| Email login | `200`, the same player id as the device, with the new name |
+| Email login, wrong password / unknown email | `401` both, with the same message |
+| Forgot password | `200` (always, so it can't be used to look up accounts) |
+| Reset with a made-up code | `400` |
+| `link/email` with no token, and with a made-up token; `display-name` with no token | `401` |
+| Every player: events, characters, `/api/players`, `/api/admin/*` | **denied** |
 
-This is the blocker, and it is not small.
+The probe can't check that **verifying removes the device token**, because that
+needs the real mailed code. Do it in the shell: `new`, `link`, `verify <code>`,
+then `device <token>` should get a `401` while `login <email> <password>` still
+works.
 
-`/api/events` is currently gated by `.RequireAdmin()`, which means it needs an
-**admin session cookie**. A game server has no business holding one — those
-cookies are minted by a human typing a password, expire after 12 hours, and
-carry admin privileges across the whole API.
+"Denied" means `401` or `403`, which is what the admin gate answers locally
+and over the SSH tunnel. When `--url` is anything other than this machine, a
+`404` counts too: on the public domain, Caddy answers `404` for a non-public
+route before the request ever reaches the app. Locally, `404` deliberately
+**fails**. The app also answers `404` for a route that doesn't exist, so a
+renamed route (the planned `/api/players` → `/api/player`, say) would otherwise
+pass as "denied" while nothing was checking the new one.
 
-So ingestion needs a **server-key path**: a credential issued per game server,
-scoped to writing events and nothing else. The planning documents mention a
-`server_keys` table; no schema for it exists.
+The list of non-player routes and their expected answers is the
+`AccessChecks` table at the top of `simulator/Probe.cs`. **When the server
+opens a route to player tokens, change that route's `Expect` there**, so the
+probe keeps checking the new rule rather than flagging it as a failure.
 
-### 3. A public route
+### Rate limits make it slow, on purpose
 
-`/api/events` is not reachable from the internet — `caddy/Caddyfile` is
-default-deny and only publishes `/Health`. A real game server, which is not
-inside an SSH tunnel, needs a `handle` block.
+`register`, `login/device`, `login/email`, and the four mail routes together
+each allow **5 calls a minute per IP**. A default 3-player run uses all 5 of
+`register`'s. The server sends no `Retry-After` header, so when the probe
+gets a `429` it waits 10 seconds and tries again, for up to about 70 seconds.
+Three players finish in a few seconds. Six players, or two runs back to back,
+take a couple of minutes. That is the limiter working, not a hang.
 
-See [Caddy](caddy.md#adding-a-public-route).
+## The shell
 
-## Open questions
+```text
+> new Captain Bob              register a guest (the name is optional); prints its device token
+player-1> name Admiral Bob     change the display name
+player-1> link                 link a random email + password (printed)
+player-1> verify 845546        the code, from the server log; this removes the device token
+player-1> forgot sim-…@example.com
+player-1> reset sim-…@example.com 123456 a-new-password
+player-1> login sim-…@example.com a-new-password     a second "device" for the same player
+player-2> event level_up level=2 zone=forest         WritePlayerEvent, values typed as numbers/bools/strings
+player-2> raw GET /api/players                       any route, with this player's token
+player-2> probe                                      the access checks, as this player
+player-2> players                                    everyone made this session
+player-2> device DeQrM3…                             log in again with a device token from an earlier 'new'
+```
 
-- Is this a long-running service or a batch job?
-- Does it buffer locally and retry, or drop on failure?
-- One process per game server, or one aggregator for all of them?
-- Does it need backpressure handling if the API is slow?
-- How are server keys provisioned and rotated?
+`help` lists every command. Each mock player gets its own made-up hardware ID,
+which the server only records.
+
+**Getting the code.** With no `SMTP_HOST` configured, which is the case locally
+and in production today, the server doesn't send mail. It logs the message
+instead, as a warning from `server.LogEmailSender`:
+
+```text
+warn: server.LogEmailSender[0]
+      No SMTP server configured, so this email was not sent. To: sim-…@example.com, Subject: Hakutaku: Verify your email
+Your code to verify your email address is 845546.
+```
+
+Mock emails use `@example.com`, a reserved domain that accepts no mail, so a
+server that does have SMTP configured never delivers them anywhere.
+
+## Pointing it at production
+
+You can, with two things to know:
+
+- **Over the public domain** only the player-auth routes are reachable, so
+  everything else comes back `404`, which counts as denied. Over the
+  [SSH tunnel](../operations/deploy.md#reaching-the-admin-ui) you see the real
+  `401`s.
+- **Every mock player is permanent.** There is no route that deletes a player,
+  so each run leaves rows in the production database. The simulator prints a
+  warning whenever `--url` isn't this machine.
+
+## Layout
+
+| File | What it holds |
+|---|---|
+| `Program.cs` | Argument parsing, and the dispatch to `probe` or `shell` |
+| `MockPlayer.cs` | One mock player: its own `HakutakuClientInstanceAPI` (so its own session), a made-up hardware ID, its device token, and email and password once linked |
+| `Probe.cs` | The scripted run, the `AccessChecks` table, the `429` retry |
+| `Report.cs` | Prints each check as `ok` / `FAIL` and keeps the tally |
+| `Shell.cs` | The interactive commands |
 
 ## Related reading
 
-- [Server](server.md) — how the event endpoint is written today
-- [Database](database.md) — the `TelemetryEvents` table
-- [Practices](../architecture/practices.md) — why admin auth is the wrong gate
-- `TODO.md` items 1 and 7
+- [SDK](sdk.md) — the library every call goes through
+- [Auth and sessions](auth.md) — what the player routes do on the server side
+- [API reference](../reference/api.md)

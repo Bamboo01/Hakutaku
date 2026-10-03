@@ -182,4 +182,4 @@ validation) or writes straight to Postgres (faster, duplicates the validation).
 
 Either way it needs something `.RequireAdmin()` cannot give it: a game server
 has no business holding an admin session cookie. That means a server-key path
-before the C++ work can land. See [Simulator](../components/simulator.md).
+before the C++ work can land. See [Telemetry ingestion](../components/ingestion.md).

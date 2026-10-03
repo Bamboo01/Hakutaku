@@ -18,6 +18,8 @@ erDiagram
     Players {
         uuid Id PK
         int Xp
+        text DisplayName
+        text RegisteredHardwareId
     }
     player_identities {
         smallint provider PK
@@ -109,11 +111,18 @@ public class Player
 {
     public Guid Id { get; set; }
     public int Xp { get; set; }
+    public string? DisplayName { get; set; }
+    public string? RegisteredHardwareId { get; set; }
 }
 ```
 
 `Player` holds no login details. How a player proves who they are lives in
-`player_identities` (below).
+`player_identities` (below). `DisplayName` is only what the game shows: it is
+nullable, deliberately **not unique** (no index), and limited to 3–25 characters
+by the app, not by the column. `RegisteredHardwareId` is the hardware ID the game
+sent to `register`, kept for support and spotting reroll farms. It's never used to
+find or sign in a player. It lives here rather than on the device identity because
+that row is deleted when an email is verified.
 
 - A `Character` belongs to a `Player` and carries no progression of its own yet
   — it is currently just identity.
@@ -132,21 +141,25 @@ is one way to prove who they are.
 
 | `provider` | Meaning | `subject` |
 |---|---|---|
-| `0` device | The game's device UUID | the UUID |
+| `0` device | A guest's device token, minted by `register` | SHA-256 of the token, lowercase hex |
 | `1` email | Email + password | the lowercased email |
 | `2` steam | Reserved, nothing creates it yet | — |
 
-- **`(provider, subject)` is the primary key.** One device or email can belong to
-  at most one player, and it is what makes find-or-create safe when two requests
-  for a new device arrive together: the second insert fails instead of making a
-  duplicate player.
+- **`(provider, subject)` is the primary key.** One device token or email can
+  belong to at most one player.
+- **Device subjects are hashes.** The token is a credential, so a database dump
+  must not hand out working ones. Plain SHA-256 is enough because the token is
+  256 random bits; there is nothing to brute-force. The `AddDeviceTokens`
+  migration hashed the device IDs that existed before tokens did, so those keep
+  working as tokens. Its `Down()` throws, because hashes can't be reversed.
 - Postgres also enforces **at most one email identity per player** (the partial
   unique index `ux_player_identities_one_email`) and the provider range
   (`ck_player_identities_provider`).
 - **`email`** repeats the address on email identities, kept apart from `subject`
   because it is PII. **`pw_hash`** is the Argon2id encoded string, email only.
-- Linking an email **adds** a row; the device identity stays, so the device keeps
-  working.
+- Linking an email **adds** a row, and the device identity stays until the email
+  is verified. **Verifying deletes the device identity** (same transaction), so a
+  player with a verified email never has one.
 - **`verified_at`** is null until the player enters the mailed code. Only a
   verified email can reset its password. Device identities never use it.
 - **`player_email_codes`** holds the codes mailed for verification (`purpose` 0)

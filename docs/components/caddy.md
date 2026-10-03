@@ -39,17 +39,24 @@ Two things are bought with that hop:
 		reverse_proxy app:8080
 	}
 
-	# The public player-auth routes (server/PlayerAuth.cs). register and login are
-	# unauthenticated and rate-limited on the app side; link/email needs a player
+	# The public player-auth routes (server/PlayerAuth.cs). register and both logins
+	# are unauthenticated and rate-limited on the app side; link/email needs a player
 	# session token. Everything else under /api stays tunnel-only until the rest
 	# of the player API exists (see TODO.md item 2).
 	handle /api/players/register {
 		reverse_proxy app:8080
 	}
-	handle /api/players/login {
+	handle /api/players/login/email {
+		reverse_proxy app:8080
+	}
+	handle /api/players/login/device {
 		reverse_proxy app:8080
 	}
 	handle /api/players/link/email {
+		reverse_proxy app:8080
+	}
+	# Sets the player's display name; needs a player session token.
+	handle /api/players/display-name {
 		reverse_proxy app:8080
 	}
 	# Email verification and password reset. verify and resend need a player token;
@@ -82,7 +89,7 @@ Two things are bought with that hop:
 }
 ```
 
-That is the entire public surface of the project: **`/Health` and the seven
+That is the entire public surface of the project: **`/Health` and the nine
 player-auth routes on the main domain, plus the wiki on its own subdomain**.
 Each `handle` matches one exact path, so a route that is not listed gets the
 `404` catch-all even if the app has it.

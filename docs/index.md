@@ -27,8 +27,9 @@ Three things in Docker containers:
 It is an **early scaffold**, and the docs say so wherever it matters. Three
 entities exist (`Player`, `Character`, `TelemetryEvent`), admin login works,
 and a production stack runs on the DigiPen team43 VM with Jenkins redeploying
-on every merge to `master`. There is no player-facing auth yet, no test suite,
-and two directories (`sdk/`, `simulator/`) are deliberate placeholders.
+on every merge to `master`. Players can register and log in, but a player
+token doesn't open game data yet. There is no test suite; the closest thing is
+the simulator, whose mock players drive the API through the client SDK.
 
 !!! note "The honest status line"
     Everything under [Components](components/server.md) describes code that
@@ -58,7 +59,8 @@ and two directories (`sdk/`, `simulator/`) are deliberate placeholders.
     [Caddy](components/caddy.md) · [Docker](components/docker.md) ·
     [Database](components/database.md) · [Server](components/server.md) ·
     [Auth and sessions](components/auth.md) · [Web UI](components/web.md) ·
-    [Simulator](components/simulator.md) · [SDK](components/sdk.md)
+    [Simulator](components/simulator.md) · [SDK](components/sdk.md) ·
+    [Telemetry ingestion](components/ingestion.md)
 
 -   **[Operations](operations/deploy.md)**
 
