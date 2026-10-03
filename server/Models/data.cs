@@ -10,6 +10,9 @@ namespace server.Models
     {
         public Guid Id { get; set; }
         public int Xp { get; set; }
+        // What the game shows for this player. Optional and not unique: it is a label, not
+        // a way to sign in, so two players can both be "Bob". See PlayerAuth.NormalizeDisplayName.
+        public string? DisplayName { get; set; }
     }
 
     // A Player can have multiple characters. No independent progress/stats of

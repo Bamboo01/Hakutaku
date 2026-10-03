@@ -89,6 +89,7 @@ app.MapGet("/api/players", async (server.Models.Db db) =>
         .Select(p => new
         {
             id = p.Id,
+            displayName = p.DisplayName,
             xp = p.Xp,
             providers = db.PlayerIdentities.Where(i => i.PlayerId == p.Id).Select(i => i.Provider).ToList(),
         })
@@ -96,6 +97,7 @@ app.MapGet("/api/players", async (server.Models.Db db) =>
     return Results.Ok(players.Select(p => new
     {
         p.id,
+        p.displayName,
         p.xp,
         providers = p.providers.Select(PlayerAuth.ProviderName).Order().ToList(),
     }));
@@ -107,8 +109,10 @@ app.MapPost("/api/players", async (server.Models.Db db, AdminCreatePlayerRequest
     var deviceId = request.DeviceId?.Trim();
     if (deviceId is not null && (deviceId.Length == 0 || deviceId.Length > 254))
         return Results.BadRequest(new { error = "deviceId must be 1-254 characters when given" });
+    if (!PlayerAuth.TryNormalizeDisplayName(request.DisplayName, out var displayName))
+        return Results.BadRequest(new { error = PlayerAuth.DisplayNameRule });
 
-    var player = new server.Models.Player { Xp = request.Xp };
+    var player = new server.Models.Player { Xp = request.Xp, DisplayName = displayName };
     db.Players.Add(player);
     if (deviceId is not null)
         db.PlayerIdentities.Add(new server.Models.PlayerIdentity
@@ -126,7 +130,7 @@ app.MapPost("/api/players", async (server.Models.Db db, AdminCreatePlayerRequest
     {
         return Results.Json(new { error = "a player with that deviceId already exists" }, statusCode: StatusCodes.Status409Conflict);
     }
-    return Results.Ok(new { id = player.Id, xp = player.Xp });
+    return Results.Ok(new { id = player.Id, displayName = player.DisplayName, xp = player.Xp });
 }).RequireAdmin();
 
 app.MapGet("/api/characters", async (server.Models.Db db) => await db.Characters.ToListAsync()).RequireAdmin();

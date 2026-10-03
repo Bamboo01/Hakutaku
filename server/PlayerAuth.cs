@@ -6,9 +6,10 @@ using server.Models;
 
 namespace server
 {
-    public record PlayerRegisterRequest(string? DeviceId);
+    public record PlayerRegisterRequest(string? DeviceId, string? DisplayName);
     public record PlayerEmailRequest(string? Email, string? Password);
-    public record AdminCreatePlayerRequest(string? DeviceId, int Xp);
+    public record AdminCreatePlayerRequest(string? DeviceId, int Xp, string? DisplayName);
+    public record PlayerDisplayNameRequest(string? DisplayName);
     public record PlayerCodeRequest(string? Code);
     public record PlayerForgotRequest(string? Email);
     public record PlayerResetRequest(string? Email, string? Code, string? NewPassword);
@@ -23,6 +24,19 @@ namespace server
         const int SessionDays = 30;
 
         public static string ProviderName(PlayerProvider provider) => provider.ToString().ToLowerInvariant();
+
+        internal const string DisplayNameRule = "displayName must be 3-25 characters, with no control characters";
+
+        // A display name is a label, not an identity -- not unique and never used to sign
+        // in -- so the only rules are about what can be shown: 3-25 characters once trimmed
+        // (PlayFab's limits) and no control characters, which could break a UI or a log
+        // line. Null means none was given, which is allowed; whitespace alone is too short.
+        internal static bool TryNormalizeDisplayName(string? raw, out string? displayName)
+        {
+            displayName = raw?.Trim();
+            return displayName is null
+                || (displayName.Length is >= 3 and <= 25 && !displayName.Any(char.IsControl));
+        }
 
         static bool IsUniqueViolation(DbUpdateException e) =>
             e.InnerException is PostgresException { SqlState: "23505" };
@@ -163,16 +177,21 @@ namespace server
             // Find-or-create by device ID, then start a session. The device UUID is made by
             // the game and kept on the device, so it works as a password nobody types:
             // whoever holds it is that player.
+            // displayName is optional and only used when this call creates the player; for a
+            // known device it is checked but ignored, and the stored name is returned so the
+            // game can see what stuck. Changing it later is /api/players/display-name.
             app.MapPost("/api/players/register", async (Db db, PlayerRegisterRequest request) =>
             {
                 if (string.IsNullOrWhiteSpace(request.DeviceId) || request.DeviceId.Length > 254)
                     return Results.BadRequest(new { error = "deviceId is required" });
+                if (!TryNormalizeDisplayName(request.DisplayName, out var displayName))
+                    return Results.BadRequest(new { error = DisplayNameRule });
 
                 var deviceId = request.DeviceId.Trim();
                 var player = await FindByIdentity(db, PlayerProvider.Device, deviceId);
                 if (player is null)
                 {
-                    player = new Player();
+                    player = new Player { DisplayName = displayName };
                     db.Players.Add(player);
                     db.PlayerIdentities.Add(new PlayerIdentity
                     {
@@ -196,8 +215,25 @@ namespace server
                 }
 
                 var (token, expiresAt) = await IssueSession(db, player.Id);
-                return Results.Ok(new { id = player.Id, deviceId, xp = player.Xp, token, expiresAt });
+                return Results.Ok(new { id = player.Id, deviceId, displayName = player.DisplayName, xp = player.Xp, token, expiresAt });
             }).RequireRateLimiting("player-register");
+
+            // Needs the player token. Sets or replaces the display name. Not rate limited, for
+            // the same reason as link/email: it needs a session, and it is one cheap UPDATE.
+            app.MapPost("/api/players/display-name", async (Db db, HttpContext http, PlayerDisplayNameRequest request) =>
+            {
+                var player = await FindBySession(db, http);
+                if (player is null)
+                    return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
+
+                if (request.DisplayName is null || !TryNormalizeDisplayName(request.DisplayName, out var displayName))
+                    return Results.BadRequest(new { error = DisplayNameRule });
+
+                await db.Players
+                    .Where(p => p.Id == player.Id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(p => p.DisplayName, displayName));
+                return Results.Ok(new { displayName });
+            });
 
             // Needs a player session. Adds an email identity next to the device one; it
             // never replaces it. Deliberately not rate limited: it is gated by a session,
@@ -387,7 +423,7 @@ namespace server
                     return Results.Json(new { error = "invalid credentials" }, statusCode: StatusCodes.Status401Unauthorized);
 
                 var (token, expiresAt) = await IssueSession(db, identity.PlayerId);
-                return Results.Ok(new { id = identity.PlayerId, xp = identity.Player.Xp, token, expiresAt });
+                return Results.Ok(new { id = identity.PlayerId, displayName = identity.Player.DisplayName, xp = identity.Player.Xp, token, expiresAt });
             }).RequireRateLimiting("player-login");
         }
     }

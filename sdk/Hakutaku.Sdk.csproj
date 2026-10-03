@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- netstandard2.1 and C# 9 are what Unity (2021.2 and later) can compile, so this
+       library can go into the Unity plugin as source or as a DLL without changes. Keep
+       it that way: no file-scoped namespaces, records, init, required or global usings.
+       Nullable is switched on per file with #nullable enable, not here, because Unity
+       never reads this file; a new file without the directive warns on its first `?`. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <RootNamespace>Hakutaku</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Unity ships Newtonsoft as an official package (com.unity.nuget.newtonsoft-json);
+         System.Text.Json would have to be vendored into a Unity project DLL by DLL. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+</Project>

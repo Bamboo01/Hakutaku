@@ -20,6 +20,10 @@
 	handle /api/players/link/email {
 		reverse_proxy app:8080
 	}
+	# Sets the player's display name; needs a player session token.
+	handle /api/players/display-name {
+		reverse_proxy app:8080
+	}
 	# Email verification and password reset. verify and resend need a player token;
 	# forgot and reset are unauthenticated. All four share one rate limit per IP.
 	handle /api/players/email/verify {

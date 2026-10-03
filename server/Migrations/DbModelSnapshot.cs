@@ -154,6 +154,9 @@ namespace server.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("DisplayName")
+                        .HasColumnType("text");
+
                     b.Property<int>("Xp")
                         .HasColumnType("integer");
 

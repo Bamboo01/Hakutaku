@@ -52,6 +52,10 @@ Two things are bought with that hop:
 	handle /api/players/link/email {
 		reverse_proxy app:8080
 	}
+	# Sets the player's display name; needs a player session token.
+	handle /api/players/display-name {
+		reverse_proxy app:8080
+	}
 	# Email verification and password reset. verify and resend need a player token;
 	# forgot and reset are unauthenticated. All four share one rate limit per IP.
 	handle /api/players/email/verify {
@@ -82,7 +86,7 @@ Two things are bought with that hop:
 }
 ```
 
-That is the entire public surface of the project: **`/Health` and the seven
+That is the entire public surface of the project: **`/Health` and the eight
 player-auth routes on the main domain, plus the wiki on its own subdomain**.
 Each `handle` matches one exact path, so a route that is not listed gets the
 `404` catch-all even if the app has it.

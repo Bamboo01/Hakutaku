@@ -18,6 +18,7 @@ erDiagram
     Players {
         uuid Id PK
         int Xp
+        text DisplayName
     }
     player_identities {
         smallint provider PK
@@ -109,11 +110,14 @@ public class Player
 {
     public Guid Id { get; set; }
     public int Xp { get; set; }
+    public string? DisplayName { get; set; }
 }
 ```
 
 `Player` holds no login details. How a player proves who they are lives in
-`player_identities` (below).
+`player_identities` (below). `DisplayName` is only what the game shows: it is
+nullable, deliberately **not unique** (no index), and limited to 3–25 characters
+by the app, not by the column.
 
 - A `Character` belongs to a `Player` and carries no progression of its own yet
   — it is currently just identity.

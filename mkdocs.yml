@@ -72,8 +72,9 @@ nav:
       - Server: components/server.md
       - Auth and sessions: components/auth.md
       - Web UI: components/web.md
-      - Simulator: components/simulator.md
       - SDK: components/sdk.md
+      - Simulator: components/simulator.md
+      - Telemetry ingestion: components/ingestion.md
   - Operations:
       - Deploy and CI/CD: operations/deploy.md
   - Reference:

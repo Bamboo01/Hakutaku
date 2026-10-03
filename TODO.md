@@ -271,9 +271,22 @@ telemetry event endpoint existing and its contract being stable first.
 
 ## 8. `sdk/` and `simulator/`
 
-Both exist as empty directories. Git doesn't track empty directories, so they
-will silently vanish if never populated. Add a `.gitkeep` to each if they're
-placeholders, or delete them.
+**Started.** `sdk/` is a PlayFab-style C# client library (netstandard2.1, C# 9,
+so it can go into Unity as-is), and `simulator/` is a .NET console app that
+makes mock players through it. `simulator probe` checks the player-auth flows
+and that every admin-only route turns a player token away. See
+`docs/components/sdk.md` and `docs/components/simulator.md`. The C++ ingestion
+service that `simulator/` was once meant for is item 7.
+
+- [ ] When characters and events open to player tokens (item 2), update the
+      SDK's wire mapping in `sdk/ServerContract.cs` and the probe's
+      `AccessChecks` expectations in `simulator/Probe.cs`
+- [ ] A `UnityWebRequest` version of `sdk/HakutakuHttp.cs` for WebGL builds
+- [ ] Machine-readable error codes in the server's `{ error }` bodies, so the
+      SDK doesn't have to infer everything from the HTTP status
+- [ ] Run `simulator probe` from Jenkins after a deploy. It makes permanent
+      players (no delete route exists), so it needs either a delete route or a
+      separate database first
 
 ---
 
