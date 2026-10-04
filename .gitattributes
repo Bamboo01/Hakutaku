@@ -1,0 +1,5 @@
+# Shell scripts must keep LF even on a Windows checkout (core.autocrlf=true),
+# or bash fails on the stray \r. Batch files want CRLF: cmd can misread labels
+# and gotos in LF-only files.
+*.sh text eol=lf
+*.bat text eol=crlf

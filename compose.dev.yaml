@@ -9,6 +9,10 @@ services:
       # ${VAR:-default} uses the environment variable if set, otherwise the default.
       # Credentials must match the postgres service below.
       ConnectionStrings__Db: ${DB_CONNECTION:-Host=postgres;Database=hakutaku;Username=hakutaku;Password=hakutaku;GSS Encryption Mode=Disable}
+      # Password for the seeded owner account `admin`, so a fresh local setup has
+      # a known login (the readme tells people to use it). Only read while the
+      # database has no admins: an existing pgdata volume keeps its old password.
+      HAKUTAKU_ADMIN_PASSWORD: ${HAKUTAKU_ADMIN_PASSWORD:-hakutaku}
     depends_on:
       postgres:
         # Wait until Postgres accepts connections, not just until the container

@@ -236,6 +236,11 @@ One command builds the UI, builds the server, and starts all four containers:
 docker compose -f compose.dev.yaml up --build
 ```
 
+!!! tip "Or let a script do it"
+    `start.bat` (Windows, double-click) and `start.sh` (`bash start.sh`) run the
+    same thing detached: they check Docker is up, wait for `/Health`, print the
+    login and open the browser. `stop.bat` / `stop.sh` run `down`, never `down -v`.
+
 The first run takes a few minutes, because it downloads base images and
 compiles everything. Then open:
 
@@ -376,12 +381,9 @@ seeds an owner with the username `admin`. The password comes from the
 
 === "Mode A (full Docker)"
 
-    `compose.dev.yaml` does not forward that variable to the app, so read the
-    generated password out of the log instead:
-
-    ```bash
-    docker compose -f compose.dev.yaml logs app | grep -i password
-    ```
+    `compose.dev.yaml` sets it to **`hakutaku`** unless you put your own
+    `HAKUTAKU_ADMIN_PASSWORD` in `.env`. A database seeded before that default
+    existed (or first seeded from Mode B) keeps whatever password it got then.
 
 Then sign in at the UI with username `admin` and that password.
 
