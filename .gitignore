@@ -143,3 +143,4 @@ pnpm-debug.log*
 
 # mkdocs build output (the wiki is served, not built -- see docs/setup.md)
 site/
+.claude/settings.local.json
