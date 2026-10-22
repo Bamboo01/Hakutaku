@@ -9,7 +9,6 @@ namespace server
     public record PlayerRegisterRequest(string? HardwareId, string? DisplayName);
     public record PlayerDeviceLoginRequest(string? DeviceToken);
     public record PlayerEmailRequest(string? Email, string? Password);
-    public record AdminCreatePlayerRequest(int Xp, string? DisplayName);
     public record PlayerDisplayNameRequest(string? DisplayName);
     public record PlayerCodeRequest(string? Code);
     public record PlayerForgotRequest(string? Email);

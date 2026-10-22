@@ -2,6 +2,9 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using server;
+using server.Endpoints.Characters;
+using server.Endpoints.Players;
+using server.Endpoints.Telemetry;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -83,59 +86,9 @@ app.MapGet("/Health", () => Results.Ok( new { health = "ok" } ));
 // caddy/Caddyfile has a handle block for each; nothing else here is public.
 app.MapPlayerEndpoints();
 
-// Admin-or-owner only. Players can now log in, but a player session doesn't unlock
-// these yet -- they are the admin's view, not the player API.
-// Lists only which providers each player has linked, never the identities themselves:
-// emails are personal data, and the hardware ID stays out of a casual listing too.
-app.MapGet("/api/players", async (server.Models.Db db) =>
-{
-    var players = await db.Players
-        .OrderBy(p => p.Id)
-        .Select(p => new
-        {
-            id = p.Id,
-            displayName = p.DisplayName,
-            xp = p.Xp,
-            providers = db.PlayerIdentities.Where(i => i.PlayerId == p.Id).Select(i => i.Provider).ToList(),
-        })
-        .ToListAsync();
-    return Results.Ok(players.Select(p => new
-    {
-        p.id,
-        p.displayName,
-        p.xp,
-        providers = p.providers.Select(PlayerAuth.ProviderName).Order().ToList(),
-    }));
-}).RequireAdmin();
-// Admin-created players have no way to sign in: credentials only come from the
-// player routes (register mints a device token, link/email adds an email).
-app.MapPost("/api/players", async (server.Models.Db db, AdminCreatePlayerRequest request) =>
-{
-    if (!PlayerAuth.TryNormalizeDisplayName(request.DisplayName, out var displayName))
-        return Results.BadRequest(new { error = PlayerAuth.DisplayNameRule });
-
-    var player = new server.Models.Player { Xp = request.Xp, DisplayName = displayName };
-    db.Players.Add(player);
-    await db.SaveChangesAsync();
-    return Results.Ok(new { id = player.Id, displayName = player.DisplayName, xp = player.Xp });
-}).RequireAdmin();
-
-app.MapGet("/api/characters", async (server.Models.Db db) => await db.Characters.ToListAsync()).RequireAdmin();
-app.MapPost("/api/characters", async (server.Models.Db db, server.Models.Character c) =>
-{
-    db.Characters.Add(c);
-    await db.SaveChangesAsync();
-    return Results.Ok(c);
-}).RequireAdmin();
-
-app.MapGet("/api/events", async (server.Models.Db db) => await db.TelemetryEvents.ToListAsync()).RequireAdmin();
-app.MapPost("/api/events", async (server.Models.Db db, server.Models.TelemetryEvent e) =>
-{
-    e.Timestamp = DateTime.UtcNow;
-    db.TelemetryEvents.Add(e);
-    await db.SaveChangesAsync();
-    return Results.Ok(e);
-}).RequireAdmin();
+app.MapPlayerRoutes();
+app.MapCharacterRoutes();
+app.MapTelemetryRoutes();
 
 app.MapAdminEndpoints();
 
