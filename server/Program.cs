@@ -2,6 +2,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using server;
+using server.Constants;
 using server.Endpoints.Characters;
 using server.Endpoints.Players;
 using server.Endpoints.Telemetry;
@@ -20,7 +21,7 @@ builder.Services.AddDbContext<server.Models.Db>(o =>
     o.UseNpgsql(builder.Configuration.GetConnectionString("Db")));
 
 // Real mail only when an SMTP host is configured; otherwise messages are just logged.
-if (string.IsNullOrWhiteSpace(builder.Configuration["Smtp:Host"]))
+if (string.IsNullOrWhiteSpace(builder.Configuration[ConfigKeys.SmtpHost]))
     builder.Services.AddSingleton<IEmailSender, LogEmailSender>();
 else
     builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
@@ -38,29 +39,18 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    o.AddPolicy("admin-login", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
-    // Public and unauthenticated (see PlayerAuth.cs), so this is the only thing standing
-    // between registration and someone hammering it to fill the table.
-    o.AddPolicy("player-register", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
-    // Email login is public too, and each attempt costs an Argon2 hash, so it gets the
-    // same per-IP limit as admin login. Separate policy so one doesn't use up the other.
-    o.AddPolicy("player-login", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
-    // Device login (login/device). A device token can't be guessed, so this only caps
-    // load; its own policy so a guest's every-launch login doesn't use up email login's.
-    o.AddPolicy("player-device-login", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
-    // The mail routes (verify, resend, forgot, reset). Each one either sends an email or
-    // lets someone guess a code, so they share one per-IP limit, apart from login's.
-    o.AddPolicy("player-mail", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
+
+    // Every policy is the same rule: a fixed number of requests per client IP in each window.
+    // They are separate policies so each group of routes has its own allowance (see RateLimits).
+    void AddPerIpPolicy(string name) => o.AddPolicy(name, context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? RateLimits.UnknownClient,
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = RateLimits.PermitLimit, Window = RateLimits.Window }));
+
+    AddPerIpPolicy(RateLimits.AdminLogin);
+    AddPerIpPolicy(RateLimits.PlayerRegister);
+    AddPerIpPolicy(RateLimits.PlayerLogin);
+    AddPerIpPolicy(RateLimits.PlayerDeviceLogin);
+    AddPerIpPolicy(RateLimits.PlayerMail);
 });
 
 // dotnet ef database update

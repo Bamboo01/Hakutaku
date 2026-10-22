@@ -1,6 +1,7 @@
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
+using server.Constants;
 
 namespace server
 {
@@ -27,10 +28,10 @@ namespace server
     {
         public async Task SendAsync(string to, string subject, string body)
         {
-            var host = config["Smtp:Host"]!;
-            var port = config.GetValue("Smtp:Port", 587);
-            var user = config["Smtp:User"];
-            var from = config["Smtp:From"] ?? user ?? throw new InvalidOperationException("Smtp:From is not set");
+            var host = config[ConfigKeys.SmtpHost]!;
+            var port = config.GetValue(ConfigKeys.SmtpPort, ConfigKeys.SmtpDefaultPort);
+            var user = config[ConfigKeys.SmtpUser];
+            var from = config[ConfigKeys.SmtpFrom] ?? user ?? throw new InvalidOperationException(ConfigKeys.SmtpFrom + " is not set");
 
             var message = new MimeMessage();
             message.From.Add(MailboxAddress.Parse(from));
@@ -44,7 +45,7 @@ namespace server
             // which fails rather than sending in the clear if the server won't do it.
             await client.ConnectAsync(host, port, port == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls);
             if (!string.IsNullOrEmpty(user))
-                await client.AuthenticateAsync(user, config["Smtp:Password"] ?? "");
+                await client.AuthenticateAsync(user, config[ConfigKeys.SmtpPassword] ?? "");
             await client.SendAsync(message);
             await client.DisconnectAsync(true);
         }

@@ -5,6 +5,7 @@ using System.Text;
 using Isopoh.Cryptography.Argon2;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using server.Constants;
 using server.Models;
 
 namespace server
@@ -116,7 +117,7 @@ namespace server
         {
             var found = await FindActiveSession(db, http);
             if (found is null)
-                return (null, Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized));
+                return (null, Results.Json(new { error = ErrorMessages.NotLoggedIn }, statusCode: StatusCodes.Status401Unauthorized));
             if (found.Value.Admin.Role != AdminRole.Owner)
                 return (null, Results.Json(new { error = "owner only" }, statusCode: StatusCodes.Status403Forbidden));
             return (found.Value.Admin, null);
@@ -132,7 +133,7 @@ namespace server
                 var db = context.HttpContext.RequestServices.GetRequiredService<Db>();
                 var found = await FindActiveSession(db, context.HttpContext);
                 if (found is null)
-                    return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
+                    return Results.Json(new { error = ErrorMessages.NotLoggedIn }, statusCode: StatusCodes.Status401Unauthorized);
                 return await next(context);
             });
             return builder;
@@ -151,7 +152,7 @@ namespace server
 
                 var passwordOk = VerifyPassword(admin?.PwHash ?? DummyHash, request.Password);
                 if (admin is null || admin.DisabledAt is not null || !passwordOk)
-                    return Results.Json(new { error = "invalid credentials" }, statusCode: StatusCodes.Status401Unauthorized);
+                    return Results.Json(new { error = ErrorMessages.InvalidCredentials }, statusCode: StatusCodes.Status401Unauthorized);
 
                 var token = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
                 var now = DateTime.UtcNow;
@@ -168,13 +169,13 @@ namespace server
 
                 http.Response.Cookies.Append(CookieName, token, SessionCookieOptions(http.Request, session.ExpiresAt));
                 return Results.NoContent();
-            }).RequireRateLimiting("admin-login");
+            }).RequireRateLimiting(RateLimits.AdminLogin);
 
             app.MapPost("/api/admin/logout", async (Db db, HttpContext http) =>
             {
                 var found = await FindActiveSession(db, http);
                 if (found is null)
-                    return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
+                    return Results.Json(new { error = ErrorMessages.NotLoggedIn }, statusCode: StatusCodes.Status401Unauthorized);
 
                 found.Value.Session.RevokedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync();
@@ -186,7 +187,7 @@ namespace server
             {
                 var found = await FindActiveSession(db, http);
                 if (found is null)
-                    return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
+                    return Results.Json(new { error = ErrorMessages.NotLoggedIn }, statusCode: StatusCodes.Status401Unauthorized);
 
                 return Results.Ok(new
                 {

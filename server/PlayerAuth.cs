@@ -2,6 +2,7 @@ using System.Buffers.Text;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using server.Constants;
 using server.Models;
 
 namespace server
@@ -207,7 +208,7 @@ namespace server
 
                 var (token, expiresAt) = await IssueSession(db, player.Id);
                 return Results.Ok(new { id = player.Id, displayName = player.DisplayName, xp = player.Xp, deviceToken, token, expiresAt });
-            }).RequireRateLimiting("player-register");
+            }).RequireRateLimiting(RateLimits.PlayerRegister);
 
             // Signs a guest in with the token register gave it. Never creates anything: an
             // unknown token is a 401, and the game should then offer "new game" or "I have an
@@ -224,7 +225,7 @@ namespace server
 
                 var (token, expiresAt) = await IssueSession(db, player.Id);
                 return Results.Ok(new { id = player.Id, displayName = player.DisplayName, xp = player.Xp, token, expiresAt });
-            }).RequireRateLimiting("player-device-login");
+            }).RequireRateLimiting(RateLimits.PlayerDeviceLogin);
 
             // Needs the player token. Sets or replaces the display name. Not rate limited, for
             // the same reason as link/email: it needs a session, and it is one cheap UPDATE.
@@ -232,7 +233,7 @@ namespace server
             {
                 var player = await FindBySession(db, http);
                 if (player is null)
-                    return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
+                    return Results.Json(new { error = ErrorMessages.NotLoggedIn }, statusCode: StatusCodes.Status401Unauthorized);
 
                 if (request.DisplayName is null || !TryNormalizeDisplayName(request.DisplayName, out var displayName))
                     return Results.BadRequest(new { error = DisplayNameRule });
@@ -252,7 +253,7 @@ namespace server
             {
                 var player = await FindBySession(db, http);
                 if (player is null)
-                    return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
+                    return Results.Json(new { error = ErrorMessages.NotLoggedIn }, statusCode: StatusCodes.Status401Unauthorized);
 
                 var email = NormalizeEmail(request.Email);
                 if (email is null || string.IsNullOrEmpty(request.Password)
@@ -260,9 +261,9 @@ namespace server
                     return Results.BadRequest(new { error = "a valid email is required and the password must be 8-256 characters" });
 
                 if (await db.PlayerIdentities.AnyAsync(i => i.PlayerId == player.Id && i.Provider == PlayerProvider.Email))
-                    return Results.Json(new { error = "this player already has an email linked" }, statusCode: StatusCodes.Status409Conflict);
+                    return Results.Json(new { error = ErrorMessages.EmailAlreadyLinked }, statusCode: StatusCodes.Status409Conflict);
                 if (await db.PlayerIdentities.AnyAsync(i => i.Provider == PlayerProvider.Email && i.Subject == email))
-                    return Results.Json(new { error = "email already in use" }, statusCode: StatusCodes.Status409Conflict);
+                    return Results.Json(new { error = ErrorMessages.EmailInUse }, statusCode: StatusCodes.Status409Conflict);
 
                 db.PlayerIdentities.Add(new PlayerIdentity
                 {
@@ -283,7 +284,7 @@ namespace server
                     // someone else took this one. The constraint name says which.
                     var oneEmailPerPlayer = e.InnerException is PostgresException { ConstraintName: "ux_player_identities_one_email" };
                     return Results.Json(
-                        new { error = oneEmailPerPlayer ? "this player already has an email linked" : "email already in use" },
+                        new { error = oneEmailPerPlayer ? ErrorMessages.EmailAlreadyLinked : ErrorMessages.EmailInUse },
                         statusCode: StatusCodes.Status409Conflict);
                 }
 
@@ -301,7 +302,7 @@ namespace server
                 }
                 catch (Exception e)
                 {
-                    logs.CreateLogger("PlayerAuth").LogError(e, "Could not send the verification email");
+                    logs.CreateLogger(LogCategories.PlayerAuth).LogError(e, "Could not send the verification email");
                 }
 
                 return Results.Ok(new { provider = ProviderName(PlayerProvider.Email), email, verified = false, verificationSent = sent });
@@ -316,17 +317,17 @@ namespace server
             {
                 var player = await FindBySession(db, http);
                 if (player is null)
-                    return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
+                    return Results.Json(new { error = ErrorMessages.NotLoggedIn }, statusCode: StatusCodes.Status401Unauthorized);
 
                 var identity = await FindEmailIdentity(db, player.Id);
                 if (identity is null)
-                    return Results.BadRequest(new { error = "no email is linked to this player" });
+                    return Results.BadRequest(new { error = ErrorMessages.NoEmailLinked });
                 if (identity.VerifiedAt is not null)
                     return Results.Ok(new { verified = true, deviceTokenRemoved = false });
 
                 var code = request.Code?.Trim();
                 if (!LooksLikeCode(code) || !await RedeemCode(db, player.Id, EmailCodePurpose.Verify, code!))
-                    return Results.BadRequest(new { error = "invalid or expired code" });
+                    return Results.BadRequest(new { error = ErrorMessages.InvalidOrExpiredCode });
 
                 var now = DateTime.UtcNow;
                 await using var transaction = await db.Database.BeginTransactionAsync();
@@ -338,18 +339,18 @@ namespace server
                     .ExecuteDeleteAsync();
                 await transaction.CommitAsync();
                 return Results.Ok(new { verified = true, deviceTokenRemoved = removed > 0 });
-            }).RequireRateLimiting("player-mail");
+            }).RequireRateLimiting(RateLimits.PlayerMail);
 
             // Needs the player token. Mails a new code, at most once a minute per player.
             app.MapPost("/api/players/email/resend", async (Db db, HttpContext http, IEmailSender mail, ILoggerFactory logs) =>
             {
                 var player = await FindBySession(db, http);
                 if (player is null)
-                    return Results.Json(new { error = "not logged in" }, statusCode: StatusCodes.Status401Unauthorized);
+                    return Results.Json(new { error = ErrorMessages.NotLoggedIn }, statusCode: StatusCodes.Status401Unauthorized);
 
                 var identity = await FindEmailIdentity(db, player.Id);
                 if (identity is null)
-                    return Results.BadRequest(new { error = "no email is linked to this player" });
+                    return Results.BadRequest(new { error = ErrorMessages.NoEmailLinked });
                 if (identity.VerifiedAt is not null)
                     return Results.Json(new { error = "email is already verified" }, statusCode: StatusCodes.Status409Conflict);
 
@@ -363,11 +364,11 @@ namespace server
                 }
                 catch (Exception e)
                 {
-                    logs.CreateLogger("PlayerAuth").LogError(e, "Could not send the verification email");
+                    logs.CreateLogger(LogCategories.PlayerAuth).LogError(e, "Could not send the verification email");
                     return Results.Json(new { error = "could not send the email, try again later" }, statusCode: StatusCodes.Status503ServiceUnavailable);
                 }
                 return Results.Ok(new { sent = true });
-            }).RequireRateLimiting("player-mail");
+            }).RequireRateLimiting(RateLimits.PlayerMail);
 
             // Always the same answer, whether or not the email is known and verified, so it
             // can't be used to find out which emails have accounts. The mail goes out in the
@@ -385,7 +386,7 @@ namespace server
                     var code = await CreateCode(db, identity.PlayerId, EmailCodePurpose.Reset);
                     if (code is not null)
                     {
-                        var log = logs.CreateLogger("PlayerAuth");
+                        var log = logs.CreateLogger(LogCategories.PlayerAuth);
                         _ = Task.Run(async () =>
                         {
                             try { await SendCodeMail(mail, email, EmailCodePurpose.Reset, code); }
@@ -394,7 +395,7 @@ namespace server
                     }
                 }
                 return Results.Ok(new { ok = true });
-            }).RequireRateLimiting("player-mail");
+            }).RequireRateLimiting(RateLimits.PlayerMail);
 
             // Sets a new password if the code mailed by /password/forgot is right. Every
             // session the player has is revoked, since a reset usually means something
@@ -411,7 +412,7 @@ namespace server
                 var identity = await db.PlayerIdentities.FirstOrDefaultAsync(i =>
                     i.Provider == PlayerProvider.Email && i.Subject == email && i.VerifiedAt != null);
                 if (identity is null || !LooksLikeCode(code) || !await RedeemCode(db, identity.PlayerId, EmailCodePurpose.Reset, code!))
-                    return Results.BadRequest(new { error = "invalid or expired code" });
+                    return Results.BadRequest(new { error = ErrorMessages.InvalidOrExpiredCode });
 
                 var hash = AdminAuth.HashPassword(request.NewPassword);
                 var now = DateTime.UtcNow;
@@ -422,7 +423,7 @@ namespace server
                     .Where(s => s.PlayerId == identity.PlayerId && s.RevokedAt == null)
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now));
                 return Results.Ok(new { ok = true });
-            }).RequireRateLimiting("player-mail");
+            }).RequireRateLimiting(RateLimits.PlayerMail);
 
             // Same answer for an unknown email and a wrong password, and an unknown email
             // still pays for a hash check, so neither the body nor the timing reveals
@@ -442,13 +443,13 @@ namespace server
 
                 var passwordOk = AdminAuth.VerifyPassword(identity?.PwHash ?? AdminAuth.DummyHash, request.Password);
                 if (identity is null || !passwordOk)
-                    return Results.Json(new { error = "invalid credentials" }, statusCode: StatusCodes.Status401Unauthorized);
+                    return Results.Json(new { error = ErrorMessages.InvalidCredentials }, statusCode: StatusCodes.Status401Unauthorized);
                 if (identity.VerifiedAt is null)
                     return Results.Json(new { error = "this email isn't verified yet; enter the code mailed to it first" }, statusCode: StatusCodes.Status403Forbidden);
 
                 var (token, expiresAt) = await IssueSession(db, identity.PlayerId);
                 return Results.Ok(new { id = identity.PlayerId, displayName = identity.Player.DisplayName, xp = identity.Player.Xp, token, expiresAt });
-            }).RequireRateLimiting("player-login");
+            }).RequireRateLimiting(RateLimits.PlayerLogin);
         }
     }
 }
