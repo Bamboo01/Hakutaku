@@ -5,12 +5,17 @@
 ```text
 Hakutaku/
 ├── server/                  ASP.NET Core 10 API (also serves the built UI)
-│   ├── Program.cs           Entry point: DI, middleware, and most endpoints
-│   ├── AdminAuth.cs         Everything auth — hashing, sessions, admin CRUD
+│   ├── Program.cs           Entry point: DI, middleware, and the Map…Routes() calls
+│   ├── AdminAuth.cs         Shared auth helpers: hashing, admin sessions, guards
+│   ├── EmailSender.cs       IEmailSender: real SMTP, or log-only when none is set
+│   ├── Endpoints/           One folder per route group: a routes file + one handler per route
+│   ├── Services/            Helpers the player routes share (sessions, identities, codes)
+│   ├── Constants/           Policy names, limits, error messages, config keys
 │   ├── Models/
-│   │   ├── data.cs          Player, Character, TelemetryEvent + the DbContext
-│   │   └── Admin.cs         AdminUser, AdminSession, AdminRole
-│   ├── Migrations/          EF Core migration history (5 so far)
+│   │   ├── Db.cs            The DbContext and the table mappings
+│   │   ├── Admin/           AdminUser, AdminSession, AdminRole
+│   │   └── Players/         Player, Character, TelemetryEvent, PlayerIdentity, PlayerSession, ...
+│   ├── Migrations/          EF Core migration history (10 so far)
 │   ├── appsettings.json             Base config
 │   └── appsettings.Development.json Dev connection string (host, not Docker)
 │

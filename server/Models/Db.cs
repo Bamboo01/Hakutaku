@@ -1,52 +1,12 @@
-﻿// This is just sample code, feel free to overwrite it.
-
 using Microsoft.EntityFrameworkCore;
 
 namespace server.Models
 {
-    // Create a POD struct. How a player proves who they are lives in
-    // PlayerIdentity (a device UUID, an email, ...), not on this row.
-    public class Player
-    {
-        public Guid Id { get; set; }
-        public int Xp { get; set; }
-        // What the game shows for this player. Optional and not unique: it is a label, not
-        // a way to sign in, so two players can both be "Bob". See PlayerInputRules.TryNormalizeDisplayName.
-        public string? DisplayName { get; set; }
-        // The hardware ID the game sent when this player registered (e.g. Unity's
-        // SystemInfo.deviceUniqueIdentifier). For support and spotting reroll farms only:
-        // it isn't secret, so nothing ever looks a player up or signs one in by it. Kept
-        // here rather than on the device identity, which is deleted at email verification.
-        public string? RegisteredHardwareId { get; set; }
-    }
-
-    // A Player can have multiple characters. No independent progress/stats of
-    // their own yet -- that's tracked on Player -- so this is just identity.
-    public class Character
-    {
-        public Guid Id { get; set; }
-        public Guid PlayerId { get; set; }
-        public Player Player { get; set; } = null!;
-        public string Name { get; set; } = "";
-    }
-
-    // Telemetry is player-scoped, not character-scoped (see CLAUDE.md).
-    // Data holds the event-specific payload as JSON.
-    public class TelemetryEvent
-    {
-        public Guid Id { get; set; }
-        public Guid PlayerId { get; set; }
-        public Player Player { get; set; } = null!;
-        public string EventType { get; set; } = "";
-        public DateTime Timestamp { get; set; }
-        public string Data { get; set; } = "";
-    }
-
     public class Db : DbContext
     {
         public Db(DbContextOptions<Db> options) : base(options) { }
 
-        // C# magic, serializes a POD struct into a database set
+        // One DbSet per table.
         public DbSet<Player> Players => Set<Player>();
         public DbSet<Character> Characters => Set<Character>();
         public DbSet<TelemetryEvent> TelemetryEvents => Set<TelemetryEvent>();

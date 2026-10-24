@@ -9,7 +9,7 @@ Roughly in dependency order, across three workstreams: the backend build
 ## 1. Expand the domain model
 
 **Done.** `Player`, `Character` and `TelemetryEvent` exist in
-`server/Models/data.cs` with a migration and `GET`/`POST` endpoints for each.
+`server/Models/Players/` with a migration and `GET`/`POST` endpoints for each.
 
 - [x] `User` / title-account entity — decided not needed: this backend serves a
       single game, so User and Player are 1:1 and `Player` is the account
@@ -307,7 +307,7 @@ service that `simulator/` was once meant for is item 7.
 - [ ] `server/appsettings.Development.json` has the dev password in source
       control. Fine for local-only credentials; move to user-secrets if it ever
       becomes a real one.
-- [ ] `server/Models/data.cs` still says "This is just sample code" — the
-      domain model is real now, so the comment can go.
+- [x] The stale "sample code" comment is gone: models are now one type per file under
+      `server/Models/`, grouped into `Admin/` and `Players/`.
 - [x] Caddyfile formatting warning — fixed when the Caddyfile was rewritten for
       `{$HAKUTAKU_DOMAIN}`; the VM's Caddy logs no longer show it.

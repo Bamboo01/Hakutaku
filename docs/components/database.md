@@ -90,7 +90,7 @@ erDiagram
 | Tables | `Players`, `Characters`, `TelemetryEvents` | `admin_users`, `admin_sessions`, `player_identities`, `player_sessions`, `player_email_codes` |
 | Naming | PascalCase (EF's default) | snake_case (configured explicitly) |
 | Primary key | `uuid`, generated client-side | `bigint` identity, or a composite key for `player_identities` |
-| Defined in | `server/Models/data.cs` | `server/Models/Admin.cs`, `server/Models/PlayerIdentity.cs` + `OnModelCreating` |
+| Defined in | `server/Models/Players/` | `server/Models/Admin/`, `server/Models/Players/` + `OnModelCreating` in `server/Models/Db.cs` |
 
 The admin and player-auth tables follow the project's documented conventions.
 The game tables predate them and still use EF defaults. (`player_id` columns are
@@ -104,7 +104,7 @@ The game tables predate them and still use EF defaults. (`player_id` columns are
 
 ### Game data
 
-`server/Models/data.cs` — three plain classes, no base class, no annotations:
+`server/Models/Players/` — one plain class per file, no base class, no annotations:
 
 ```csharp
 public class Player
@@ -136,7 +136,7 @@ that row is deleted when an email is verified.
 
 ### Player auth data
 
-`server/Models/PlayerIdentity.cs`. A player can have several **identities**; each
+`server/Models/Players/` (PlayerIdentity, PlayerSession, PlayerEmailCode). A player can have several **identities**; each
 is one way to prove who they are.
 
 | `provider` | Meaning | `subject` |
@@ -172,7 +172,7 @@ is one way to prove who they are.
 
 ### Admin data
 
-`server/Models/Admin.cs`:
+`server/Models/Admin/`:
 
 ```csharp
 public enum AdminRole : short

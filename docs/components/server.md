@@ -234,7 +234,5 @@ Dev ports come from `server/Properties/launchSettings.json`: `5008` for HTTP,
 - **No validation layer.** Only auth does input checking, by hand.
 - **List endpoints return the whole table.** No paging, no filtering, no `PUT`
   or `DELETE` on game data.
-- **`data.cs` still opens with "This is just sample code".** It is not; the
-  comment is stale and the backend owner has it.
 - **No tests.** The Jenkins pipeline has no test stage because there is nothing
   to run.
