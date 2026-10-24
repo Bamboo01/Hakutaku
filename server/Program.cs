@@ -5,6 +5,7 @@ using server;
 using server.Constants;
 using server.Endpoints.Admin;
 using server.Endpoints.Characters;
+using server.Endpoints.PlayerAuth;
 using server.Endpoints.Players;
 using server.Endpoints.Telemetry;
 
@@ -73,9 +74,9 @@ app.UseRateLimiter();
 // NOTE: do not map "/" to an endpoint. Static-file middleware skips any request
 // that already matched an endpoint, so a route here shadows the Vue UI below.
 app.MapGet("/Health", () => Results.Ok( new { health = "ok" } ));
-// The public player routes (register, link/email, login) are in PlayerAuth.cs.
-// caddy/Caddyfile has a handle block for each; nothing else here is public.
-app.MapPlayerEndpoints();
+// The public player routes (register, logins, link/email, verification, password reset)
+// are in Endpoints/PlayerAuth/. caddy/Caddyfile has a handle block for each; nothing else is public.
+app.MapPlayerAuthRoutes();
 
 app.MapPlayerRoutes();
 app.MapCharacterRoutes();

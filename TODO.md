@@ -36,7 +36,7 @@ first start against an empty database.
       opaque session tokens stored only as SHA-256
 - [x] `/api/players`, `/api/characters` and `/api/events` guarded with
       `.RequireAdmin()`; `/api/admin/admins` restricted to the owner
-- [x] Player auth (`server/PlayerAuth.cs`): `player_identities` (device /
+- [x] Player auth (`server/Endpoints/PlayerAuth/`): `player_identities` (device /
       email, steam reserved) and `player_sessions` tables. `POST
       /api/players/register` makes a guest and returns a server-minted device
       token once (stored only as SHA-256; the request's `hardwareId` is just

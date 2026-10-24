@@ -354,7 +354,7 @@ One-way. No restore endpoint, because nobody needed one.
 
 ## Player auth
 
-`server/PlayerAuth.cs`. It reuses the admin helpers (`HashPassword`,
+The player routes are in `server/Endpoints/PlayerAuth/`, and their helpers in `server/Services/`. They reuse the admin helpers (`HashPassword`,
 `VerifyPassword`, `HashToken`, `DummyHash`), so players get the same Argon2id
 settings and the same hash-only token storage. The differences:
 

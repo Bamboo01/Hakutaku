@@ -91,8 +91,8 @@ public static async Task<IResult> Handle(Db db) =>
 
 A handler takes the `DbContext` by injection, does its query, and returns a
 result. `Program.cs` calls each group's `Map…Routes()` explicitly. The groups
-moved so far are characters, players, telemetry and admin. The nine player-auth
-routes are still in `PlayerAuth.cs`.
+are characters, players, telemetry, admin and player auth (nine routes, with their
+helpers in `Services/`).
 
 There is no repository interface wrapping EF Core, and no service class in
 between. At this size that indirection would be pure cost.

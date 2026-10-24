@@ -11,7 +11,7 @@ namespace server.Models
         public Guid Id { get; set; }
         public int Xp { get; set; }
         // What the game shows for this player. Optional and not unique: it is a label, not
-        // a way to sign in, so two players can both be "Bob". See PlayerAuth.TryNormalizeDisplayName.
+        // a way to sign in, so two players can both be "Bob". See PlayerInputRules.TryNormalizeDisplayName.
         public string? DisplayName { get; set; }
         // The hardware ID the game sent when this player registered (e.g. Unity's
         // SystemInfo.deviceUniqueIdentifier). For support and spotting reroll farms only:

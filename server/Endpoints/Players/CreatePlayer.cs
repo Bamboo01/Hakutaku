@@ -1,5 +1,6 @@
 using server.Constants;
 using server.Models;
+using server.Services;
 
 namespace server.Endpoints.Players
 {
@@ -12,7 +13,7 @@ namespace server.Endpoints.Players
         // link/email adds an email).
         public static async Task<IResult> Handle(Db db, AdminCreatePlayerRequest request)
         {
-            if (!PlayerAuth.TryNormalizeDisplayName(request.DisplayName, out var displayName))
+            if (!PlayerInputRules.TryNormalizeDisplayName(request.DisplayName, out var displayName))
                 return Results.BadRequest(new { error = ErrorMessages.DisplayNameRule });
 
             var player = new Player { Xp = request.Xp, DisplayName = displayName };

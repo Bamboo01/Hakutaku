@@ -27,7 +27,7 @@ namespace server
         const int HashLength = 32;
 
         // Checked against when the username is unknown, so a miss takes as long as a wrong password.
-        // internal: player email login (PlayerAuth.cs) shares the hashing and token helpers.
+        // internal: player email login (Endpoints/PlayerAuth/) shares the hashing and token helpers.
         internal static readonly string DummyHash = HashPassword("dummy-password-for-timing");
 
         public static string HashPassword(string password) =>

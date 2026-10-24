@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using server.Models;
+using server.Services;
 
 namespace server.Endpoints.Players
 {
@@ -27,7 +28,7 @@ namespace server.Endpoints.Players
                 p.id,
                 p.displayName,
                 p.xp,
-                providers = p.providers.Select(PlayerAuth.ProviderName).Order().ToList(),
+                providers = p.providers.Select(PlayerIdentityService.ProviderName).Order().ToList(),
             }));
         }
     }

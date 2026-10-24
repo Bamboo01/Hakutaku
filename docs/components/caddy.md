@@ -39,7 +39,7 @@ Two things are bought with that hop:
 		reverse_proxy app:8080
 	}
 
-	# The public player-auth routes (server/PlayerAuth.cs). register and both logins
+	# The public player-auth routes (server/Endpoints/PlayerAuth/). register and both logins
 	# are unauthenticated and rate-limited on the app side; link/email needs a player
 	# session token. Everything else under /api stays tunnel-only until the rest
 	# of the player API exists (see TODO.md item 2).
