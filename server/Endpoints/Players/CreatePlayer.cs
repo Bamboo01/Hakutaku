@@ -1,3 +1,4 @@
+using server.Constants;
 using server.Models;
 
 namespace server.Endpoints.Players
@@ -12,7 +13,7 @@ namespace server.Endpoints.Players
         public static async Task<IResult> Handle(Db db, AdminCreatePlayerRequest request)
         {
             if (!PlayerAuth.TryNormalizeDisplayName(request.DisplayName, out var displayName))
-                return Results.BadRequest(new { error = PlayerAuth.DisplayNameRule });
+                return Results.BadRequest(new { error = ErrorMessages.DisplayNameRule });
 
             var player = new Player { Xp = request.Xp, DisplayName = displayName };
             db.Players.Add(player);

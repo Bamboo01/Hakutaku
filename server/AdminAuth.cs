@@ -144,7 +144,7 @@ namespace server
             app.MapPost("/api/admin/login", async (Db db, HttpContext http, LoginRequest request) =>
             {
                 if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrEmpty(request.Password)
-                    || request.Username.Length > 254 || request.Password.Length > 256)
+                    || request.Username.Length > Limits.MaxIdentifierLength || request.Password.Length > Limits.MaxPasswordLength)
                     return Results.BadRequest(new { error = "username and password are required" });
 
                 var username = request.Username.Trim().ToLowerInvariant();
@@ -225,8 +225,8 @@ namespace server
                 if (error is not null) return error;
 
                 if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrEmpty(request.Password)
-                    || request.Username.Length > 254 || request.Password.Length < 8 || request.Password.Length > 256)
-                    return Results.BadRequest(new { error = "username is required and password must be 8-256 characters" });
+                    || request.Username.Length > Limits.MaxIdentifierLength || request.Password.Length < Limits.MinPasswordLength || request.Password.Length > Limits.MaxPasswordLength)
+                    return Results.BadRequest(new { error = ErrorMessages.CreateAdminInvalid });
 
                 var admin = new AdminUser
                 {

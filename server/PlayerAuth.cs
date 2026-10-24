@@ -26,17 +26,15 @@ namespace server
 
         public static string ProviderName(PlayerProvider provider) => provider.ToString().ToLowerInvariant();
 
-        internal const string DisplayNameRule = "displayName must be 3-25 characters, with no control characters";
-
         // A display name is a label, not an identity -- not unique and never used to sign
-        // in -- so the only rules are about what can be shown: 3-25 characters once trimmed
+        // in -- so the only rules are about what can be shown: a length range once trimmed
         // (PlayFab's limits) and no control characters, which could break a UI or a log
         // line. Null means none was given, which is allowed; whitespace alone is too short.
         internal static bool TryNormalizeDisplayName(string? raw, out string? displayName)
         {
             displayName = raw?.Trim();
             return displayName is null
-                || (displayName.Length is >= 3 and <= 25 && !displayName.Any(char.IsControl));
+                || (displayName.Length is >= Limits.DisplayNameMinLength and <= Limits.DisplayNameMaxLength && !displayName.Any(char.IsControl));
         }
 
         static bool IsUniqueViolation(DbUpdateException e) =>
@@ -94,7 +92,7 @@ namespace server
         static string? NormalizeEmail(string? raw)
         {
             var email = raw?.Trim().ToLowerInvariant();
-            if (string.IsNullOrEmpty(email) || email.Length > 254) return null;
+            if (string.IsNullOrEmpty(email) || email.Length > Limits.MaxIdentifierLength) return null;
             var at = email.IndexOf('@');
             if (at < 1 || at != email.LastIndexOf('@') || at == email.Length - 1) return null;
             return email.Any(char.IsWhiteSpace) ? null : email;
@@ -190,10 +188,10 @@ namespace server
             app.MapPost("/api/players/register", async (Db db, PlayerRegisterRequest request) =>
             {
                 var hardwareId = request.HardwareId?.Trim();
-                if (string.IsNullOrEmpty(hardwareId) || hardwareId.Length > 254)
-                    return Results.BadRequest(new { error = "hardwareId is required (1-254 characters); register no longer takes a deviceId" });
+                if (string.IsNullOrEmpty(hardwareId) || hardwareId.Length > Limits.MaxIdentifierLength)
+                    return Results.BadRequest(new { error = ErrorMessages.HardwareIdRequired });
                 if (!TryNormalizeDisplayName(request.DisplayName, out var displayName))
-                    return Results.BadRequest(new { error = DisplayNameRule });
+                    return Results.BadRequest(new { error = ErrorMessages.DisplayNameRule });
 
                 var deviceToken = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
                 var player = new Player { DisplayName = displayName, RegisteredHardwareId = hardwareId };
@@ -216,7 +214,7 @@ namespace server
             // bits, so guessing is hopeless and the rate limit is only about load.
             app.MapPost("/api/players/login/device", async (Db db, PlayerDeviceLoginRequest request) =>
             {
-                if (string.IsNullOrWhiteSpace(request.DeviceToken) || request.DeviceToken.Length > 254)
+                if (string.IsNullOrWhiteSpace(request.DeviceToken) || request.DeviceToken.Length > Limits.MaxIdentifierLength)
                     return Results.BadRequest(new { error = "deviceToken is required" });
 
                 var player = await FindByIdentity(db, PlayerProvider.Device, HashDeviceToken(request.DeviceToken));
@@ -236,7 +234,7 @@ namespace server
                     return Results.Json(new { error = ErrorMessages.NotLoggedIn }, statusCode: StatusCodes.Status401Unauthorized);
 
                 if (request.DisplayName is null || !TryNormalizeDisplayName(request.DisplayName, out var displayName))
-                    return Results.BadRequest(new { error = DisplayNameRule });
+                    return Results.BadRequest(new { error = ErrorMessages.DisplayNameRule });
 
                 await db.Players
                     .Where(p => p.Id == player.Id)
@@ -257,8 +255,8 @@ namespace server
 
                 var email = NormalizeEmail(request.Email);
                 if (email is null || string.IsNullOrEmpty(request.Password)
-                    || request.Password.Length < 8 || request.Password.Length > 256)
-                    return Results.BadRequest(new { error = "a valid email is required and the password must be 8-256 characters" });
+                    || request.Password.Length < Limits.MinPasswordLength || request.Password.Length > Limits.MaxPasswordLength)
+                    return Results.BadRequest(new { error = ErrorMessages.LinkEmailInvalid });
 
                 if (await db.PlayerIdentities.AnyAsync(i => i.PlayerId == player.Id && i.Provider == PlayerProvider.Email))
                     return Results.Json(new { error = ErrorMessages.EmailAlreadyLinked }, statusCode: StatusCodes.Status409Conflict);
@@ -406,8 +404,8 @@ namespace server
                 var email = NormalizeEmail(request.Email);
                 var code = request.Code?.Trim();
                 if (email is null || string.IsNullOrEmpty(request.NewPassword)
-                    || request.NewPassword.Length < 8 || request.NewPassword.Length > 256)
-                    return Results.BadRequest(new { error = "a valid email is required and the new password must be 8-256 characters" });
+                    || request.NewPassword.Length < Limits.MinPasswordLength || request.NewPassword.Length > Limits.MaxPasswordLength)
+                    return Results.BadRequest(new { error = ErrorMessages.ResetPasswordInvalid });
 
                 var identity = await db.PlayerIdentities.FirstOrDefaultAsync(i =>
                     i.Provider == PlayerProvider.Email && i.Subject == email && i.VerifiedAt != null);
@@ -434,7 +432,7 @@ namespace server
             app.MapPost("/api/players/login/email", async (Db db, PlayerEmailRequest request) =>
             {
                 var email = NormalizeEmail(request.Email);
-                if (email is null || string.IsNullOrEmpty(request.Password) || request.Password.Length > 256)
+                if (email is null || string.IsNullOrEmpty(request.Password) || request.Password.Length > Limits.MaxPasswordLength)
                     return Results.BadRequest(new { error = "email and password are required" });
 
                 var identity = await db.PlayerIdentities
