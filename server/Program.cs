@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using server;
 using server.Constants;
+using server.Endpoints.Admin;
 using server.Endpoints.Characters;
 using server.Endpoints.Players;
 using server.Endpoints.Telemetry;
@@ -80,7 +81,7 @@ app.MapPlayerRoutes();
 app.MapCharacterRoutes();
 app.MapTelemetryRoutes();
 
-app.MapAdminEndpoints();
+app.MapAdminRoutes();
 
 // UseDefaultFiles rewrites a request for / to /index.html
 app.UseDefaultFiles();

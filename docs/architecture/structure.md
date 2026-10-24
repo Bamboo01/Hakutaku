@@ -74,21 +74,33 @@ origin and login breaks.
 
 ### No controllers, no repositories, no service layer
 
-Endpoints are lambdas registered directly on the app. A handler takes the
-`DbContext` by injection, does its query, and returns a result:
+Routes are grouped under `server/Endpoints/<Group>/`. Each group has one small
+routes file holding the URL prefix, the auth and rate limits, and one line per
+route. Each route's handler is a static `Handle` method in its own file:
 
 ```csharp
-app.MapGet("/api/players", async (server.Models.Db db) =>
-    await db.Players.ToListAsync()).RequireAdmin();
+// Endpoints/Characters/CharacterRoutes.cs
+var group = app.MapGroup("/api/characters").RequireAdmin();
+group.MapGet("", ListCharacters.Handle);
+group.MapPost("", CreateCharacter.Handle);
+
+// Endpoints/Characters/ListCharacters.cs
+public static async Task<IResult> Handle(Db db) =>
+    Results.Ok(await db.Characters.ToListAsync());
 ```
 
-There is no repository interface wrapping EF Core, and no service class in
-between. At this size that indirection would be pure cost. If a handler ever
-grows past a screenful, pull it into a method — that is the whole pattern.
+A handler takes the `DbContext` by injection, does its query, and returns a
+result. `Program.cs` calls each group's `Map…Routes()` explicitly. The groups
+moved so far are characters, players, telemetry and admin. The nine player-auth
+routes are still in `PlayerAuth.cs`.
 
-The one exception is auth, which lives in `AdminAuth.cs` as a static class with
-`MapAdminEndpoints()`. It earned its own file because the logic is genuinely
-shared (session lookup, role checks) and genuinely subtle.
+There is no repository interface wrapping EF Core, and no service class in
+between. At this size that indirection would be pure cost.
+
+Auth still has shared helpers in `AdminAuth.cs` (a static class: session lookup,
+role checks, password hashing). They earned their own file because the logic is
+genuinely shared and genuinely subtle. The admin routes themselves are in
+`Endpoints/Admin/`.
 
 ### Auth is an endpoint filter, not an attribute
 
