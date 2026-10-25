@@ -1,3 +1,14 @@
+/*!************************************************************************
+\file   Limits.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the size limits on what a client can send:
+        passwords, display names, identifiers, character names and event
+        payloads.
+
+        Checked by the handlers and quoted in ErrorMessages.cs.
+**************************************************************************/
 namespace server.Constants
 {
     // size limits on what a client can send. messages that quote a limit are built from these

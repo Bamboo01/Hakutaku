@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   EventResponse.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines EventResponse, the small record the API sends back
+        for a telemetry event, so the whole database entity (with its nested
+        player) never leaves the server.
+
+        Used by CreateEvent.cs and ListEvents.cs. Built from the
+        TelemetryEvent model.
+**************************************************************************/
 using server.Models;
 
 namespace server.Endpoints.Telemetry

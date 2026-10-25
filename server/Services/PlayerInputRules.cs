@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   PlayerInputRules.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the rules for what a player may send as a display
+        name or an email: length and character checks for the name, and
+        trimming and a check plus lowercasing for the email.
+
+        Used by Register.cs, SetDisplayName.cs, CreatePlayer.cs and the
+        email handlers. Lengths come from Limits.cs.
+**************************************************************************/
 using server.Constants;
 
 namespace server.Services

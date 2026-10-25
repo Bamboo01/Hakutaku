@@ -1,3 +1,16 @@
+/*!************************************************************************
+\file   CreateAdmin.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/admin/admins route. Owner only. It
+        always creates a regular admin, since there is only one owner and it
+        is made at first start. The request is a small record, so a client
+        can only send a username and password.
+
+        Mapped in AdminRoutes.cs. Uses AdminSessionService.RequireOwner and
+        PasswordHasher.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Auth;
 using server.Constants;

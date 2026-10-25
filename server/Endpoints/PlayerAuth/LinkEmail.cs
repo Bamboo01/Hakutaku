@@ -1,3 +1,18 @@
+/*!************************************************************************
+\file   LinkEmail.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/players/link/email route, which adds
+        an email and password to a logged-in guest and mails a verification
+        code. A taken email gets the same answer as a free one, and the real
+        owner is notified instead, so the route cannot be used to find out
+        which emails have accounts.
+
+        Mapped in PlayerAuthRoutes.cs with the player-link rate limit. Uses
+        PlayerSessionService to find the caller, EmailCodeService for the
+        code, and LinkAttemptNotifier to warn the owner of a taken email.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using server.Auth;

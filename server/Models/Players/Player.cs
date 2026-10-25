@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   Player.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the Player model, a player account. How a player
+        proves who they are lives in PlayerIdentity, not on this row. The
+        display name is an optional label and is not unique.
+
+        Related to PlayerIdentity, PlayerSession, PlayerEmailCode, Character
+        and TelemetryEvent. Table mapped in Db.cs.
+**************************************************************************/
 namespace server.Models
 {
     // a player account. how they prove who they are lives in PlayerIdentity (device token,

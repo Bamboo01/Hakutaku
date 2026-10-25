@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   ServiceRegistration.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines AddAppServices, which registers everything that
+        touches the database, the clock or configuration. Most are made once
+        per request and share that request's Db. The clock and the
+        link-attempt notifier are singletons.
+
+        Called from Program.cs. Handlers take these services as parameters.
+**************************************************************************/
 using server.Auth;
 using server.Services;
 

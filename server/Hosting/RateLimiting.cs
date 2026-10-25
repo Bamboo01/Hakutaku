@@ -1,3 +1,16 @@
+/*!************************************************************************
+\file   RateLimiting.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines AddAppRateLimiting, which creates the rate limit
+        policies that routes name with RequireRateLimiting. Every policy is
+        the same rule, so many requests per client IP per window, but each
+        group of routes has its own so one cannot use up another's
+        allowance.
+
+        Policy names are in RateLimits.cs. Called from Program.cs.
+**************************************************************************/
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using server.Constants;

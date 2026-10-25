@@ -1,3 +1,17 @@
+/*!************************************************************************
+\file   PlayerAuthRoutes.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines MapPlayerAuthRoutes, which maps the public player
+        routes under /api/players (register, both logins, link email,
+        verify, resend, password reset and display name) and their rate
+        limits. Sessions are a Bearer token and not a cookie, since the
+        callers are game clients.
+
+        Called from Program.cs. Each route has its own handle block in
+        caddy/Caddyfile. Policy names come from RateLimits.cs.
+**************************************************************************/
 using server.Constants;
 
 namespace server.Endpoints.PlayerAuth

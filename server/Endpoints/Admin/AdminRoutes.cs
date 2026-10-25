@@ -1,3 +1,16 @@
+/*!************************************************************************
+\file   AdminRoutes.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines MapAdminRoutes, which maps the /api/admin routes
+        (login, logout, me and the owner-only admin management) to their
+        handlers. It is the only file that knows these URLs and the login
+        rate limit.
+
+        Called from Program.cs. The handlers are the other files in this
+        folder.
+**************************************************************************/
 using server.Constants;
 
 namespace server.Endpoints.Admin

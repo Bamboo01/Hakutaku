@@ -1,3 +1,16 @@
+/*!************************************************************************
+\file   DbErrors.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines two checks for Postgres errors that are handled on
+        purpose: an insert that broke a unique index, and a row that points
+        at something that does not exist. A handler can then answer with a
+        400 or 409 instead of letting them turn into a 500.
+
+        Used by CreateAdmin.cs, LinkEmail.cs, CreateCharacter.cs and
+        CreateEvent.cs.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 

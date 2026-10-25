@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   CreatePlayer.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/players route, where an admin
+        creates a player. That player cannot sign in, because credentials
+        only come from the player auth routes.
+
+        Mapped in PlayerRoutes.cs (admin only). Uses PlayerInputRules to
+        check the display name.
+**************************************************************************/
 using server.Constants;
 using server.Models;
 using server.Services;

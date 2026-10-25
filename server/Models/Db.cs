@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   Db.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines Db, the single database context. It lists one
+        DbSet per table and sets up the table and column names, keys,
+        indexes and relationships that need more than the defaults.
+
+        Registered in Program.cs. Every entity in Models is reached through
+        it.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 
 namespace server.Models

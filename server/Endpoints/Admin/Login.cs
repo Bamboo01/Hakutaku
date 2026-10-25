@@ -1,3 +1,16 @@
+/*!************************************************************************
+\file   Login.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/admin/login route. It checks the
+        username and password and, if they match, creates a session and sets
+        the HttpOnly session cookie. It also unwraps IPv4 addresses that
+        arrive in IPv6 form, so the session stores the plain address.
+
+        Mapped in AdminRoutes.cs with the admin-login rate limit. Uses
+        PasswordHasher and the cookie settings in AdminSessionService.
+**************************************************************************/
 using System.Buffers.Text;
 using System.Net;
 using System.Security.Cryptography;

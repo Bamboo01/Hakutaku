@@ -1,3 +1,18 @@
+/*!************************************************************************
+\file   Probe.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the probe command of the simulator. It registers
+        mock players, takes the first through the account flows, then has
+        each player try every route beyond player auth, and compares what
+        happened with what was expected. The run exits with 1 on any
+        surprise.
+
+        Started from Program.cs. Uses MockPlayer and Report. AccessChecks
+        lists every non-player route and what a player token should get, so
+        update it when a route opens to players.
+**************************************************************************/
 using Hakutaku;
 using Hakutaku.ClientModels;
 

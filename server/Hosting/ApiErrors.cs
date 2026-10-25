@@ -1,3 +1,16 @@
+/*!************************************************************************
+\file   ApiErrors.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the answers for the two cases no route handles, in
+        the same error shape as every other error: a JSON 500 for any
+        unexpected exception (details go to the log, never to the client)
+        and a JSON 404 for unknown paths under /api.
+
+        Wired up in Program.cs: the exception handler goes first and the 404
+        catch-all goes last. Messages come from ErrorMessages.cs.
+**************************************************************************/
 using server.Constants;
 
 namespace server.Hosting

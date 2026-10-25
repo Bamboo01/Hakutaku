@@ -1,3 +1,14 @@
+/*!************************************************************************
+\file   ListAdmins.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the GET /api/admin/admins route. Owner only. It
+        lists every admin, deactivated ones included, because the admins
+        page needs their state and their id.
+
+        Mapped in AdminRoutes.cs. Uses AdminSessionService.RequireOwner.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Auth;
 using server.Models;

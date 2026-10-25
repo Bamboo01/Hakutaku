@@ -1,3 +1,16 @@
+/*!************************************************************************
+\file   LoginWithEmail.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/players/login/email route, which
+        signs in with a verified email and password. A wrong password and an
+        unknown account get the same answer, and an unverified email gets a
+        403.
+
+        Mapped in PlayerAuthRoutes.cs with the player-login rate limit. Uses
+        PasswordHasher and PlayerSessionService.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Auth;
 using server.Constants;

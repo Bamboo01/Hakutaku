@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   DeactivateAdmin.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the DELETE /api/admin/admins/{id} route. Owner
+        only. It is one-way: it sets disabled_at instead of deleting the
+        row, and revokes the admin's sessions in the same transaction so it
+        takes effect at once. The owner can never be deactivated.
+
+        Mapped in AdminRoutes.cs. Uses AdminSessionService.RequireOwner.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Auth;
 using server.Hosting;

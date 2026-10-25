@@ -1,3 +1,18 @@
+/*!************************************************************************
+\file   VerifyEmail.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/players/email/verify route. It needs
+        the player token and redeems the code mailed by link/email or
+        email/resend. A verified email makes the account recoverable, so the
+        device token is deleted in the same transaction, and
+        deviceTokenRemoved tells the game to drop its stored copy.
+
+        Mapped in PlayerAuthRoutes.cs with the player-mail rate limit. Uses
+        EmailCodeService.RedeemCodeThen, PlayerSessionService and
+        PlayerIdentityService.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Constants;
 using server.Hosting;

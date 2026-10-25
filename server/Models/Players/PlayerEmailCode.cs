@@ -1,3 +1,16 @@
+/*!************************************************************************
+\file   PlayerEmailCode.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the PlayerEmailCode model: a short code mailed to
+        a player, single use and short lived, with only a few wrong guesses
+        allowed because six digits alone are easy to brute-force. Only the
+        hash of the code is stored.
+
+        Belongs to a Player. Created and redeemed by EmailCodeService. Table
+        mapped in Db.cs.
+**************************************************************************/
 namespace server.Models
 {
     // a short code mailed to a player. single use, short lived, and only a few wrong guesses

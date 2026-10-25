@@ -1,3 +1,16 @@
+/*!************************************************************************
+\file   AdminSessionService.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines AdminSessionService, which handles admin login
+        sessions: the cookie name and lifetimes, finding which session a
+        request belongs to (and pushing its idle expiry forward), and the
+        owner-only check that owner routes call.
+
+        Used by the admin handlers in Endpoints/Admin and by the
+        RequireAdmin guard. Reads AdminSession and AdminUser through Db.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Constants;
 using server.Hosting;

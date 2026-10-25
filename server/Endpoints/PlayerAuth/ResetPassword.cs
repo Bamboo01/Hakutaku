@@ -1,3 +1,17 @@
+/*!************************************************************************
+\file   ResetPassword.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/players/password/reset route, which
+        sets a new password when the code from password/forgot is right. It
+        then revokes every session the player has, so they sign in again,
+        and the code check and the password change happen in one
+        transaction.
+
+        Mapped in PlayerAuthRoutes.cs with the player-mail rate limit. Uses
+        EmailCodeService.RedeemCodeThen and PasswordHasher.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Auth;
 using server.Constants;

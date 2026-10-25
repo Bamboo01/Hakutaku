@@ -1,3 +1,13 @@
+/*!************************************************************************
+\file   ListCharacters.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the GET /api/characters route, which returns every
+        character as CharacterResponse records. There is no paging yet.
+
+        Mapped in CharacterRoutes.cs.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Models;
 

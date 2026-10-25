@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   PlayerIdentityService.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines PlayerIdentityService, which looks up and names a
+        player's identities (device, email). It also holds how a device
+        token is turned into the value stored in the database.
+
+        Used by the player auth handlers. Works with PlayerIdentity and
+        TokenHasher.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Auth;
 using server.Models;

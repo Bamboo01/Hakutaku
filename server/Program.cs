@@ -1,3 +1,17 @@
+/*!************************************************************************
+\file   Program.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file is the entry point of the Hakutaku server. It registers
+        the services, applies the migrations, seeds the owner account and
+        sets up the request pipeline: error handling, forwarded headers,
+        rate limiting, the route groups, then the static files and the Vue
+        fallback.
+
+        Calls the setup in Hosting/ and each Map...Routes() in Endpoints/.
+        The order matters, especially the /api catch-all being last.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Endpoints.Admin;
 using server.Endpoints.Characters;

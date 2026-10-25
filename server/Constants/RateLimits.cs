@@ -1,3 +1,16 @@
+/*!************************************************************************
+\file   RateLimits.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the names of the rate limit policies (admin login,
+        player register, device login, email login, mail and link email).
+        Each name is used twice: where the policy is created and on the
+        routes it limits.
+
+        Policies are created in Hosting/RateLimiting.cs and applied in
+        AdminRoutes.cs and PlayerAuthRoutes.cs.
+**************************************************************************/
 namespace server.Constants
 {
     public static class RateLimits

@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   EmailSetup.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines AddEmailSender, which picks how email is sent:
+        real SMTP when Smtp:Host is set, otherwise a sender that only logs
+        the message.
+
+        Called from Program.cs. Chooses between SmtpEmailSender and
+        LogEmailSender.
+**************************************************************************/
 using server.Constants;
 using server.SEmail;
 

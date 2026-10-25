@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   PlayerRoutes.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines MapPlayerRoutes, which maps the admin's view of
+        players (GET and POST /api/players) and puts the admin check on the
+        whole group.
+
+        Called from Program.cs. The public sign-in routes under the same
+        path are in Endpoints/PlayerAuth.
+**************************************************************************/
 using server.Auth;
 
 namespace server.Endpoints.Players

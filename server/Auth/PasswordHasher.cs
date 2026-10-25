@@ -1,3 +1,16 @@
+/*!************************************************************************
+\file   PasswordHasher.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines PasswordHasher, Argon2id password hashing with the
+        OWASP minimum settings, shared by admin and player passwords. It
+        also keeps a dummy hash to check against when an account does not
+        exist, so a miss takes as long as a wrong password.
+
+        Used by the login, create-admin, link-email and password-reset
+        handlers and by OwnerSeeder.
+**************************************************************************/
 using Isopoh.Cryptography.Argon2;
 
 namespace server.Auth

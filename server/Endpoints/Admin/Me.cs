@@ -1,3 +1,14 @@
+/*!************************************************************************
+\file   Me.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the GET /api/admin/me route. It says who the
+        session cookie belongs to, which is how the admin UI finds out
+        whether it is still logged in.
+
+        Mapped in AdminRoutes.cs. Called by the web admin UI.
+**************************************************************************/
 using server.Auth;
 using server.Constants;
 using server.Models;

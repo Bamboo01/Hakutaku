@@ -1,3 +1,14 @@
+/*!************************************************************************
+\file   Logout.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/admin/logout route. It revokes the
+        current session and clears the cookie.
+
+        Mapped in AdminRoutes.cs. Uses AdminSessionService to find the
+        session.
+**************************************************************************/
 using server.Auth;
 using server.Constants;
 using server.Hosting;

@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   AdminGuards.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines RequireAdmin, an extension that is chained onto a
+        route or a route group to let in any signed-in admin or the owner.
+        Owner-only routes call RequireOwner inside the handler instead.
+
+        Used by CharacterRoutes.cs, PlayerRoutes.cs and TelemetryRoutes.cs.
+        Looks the session up through AdminSessionService.
+**************************************************************************/
 using server.Constants;
 
 namespace server.Auth

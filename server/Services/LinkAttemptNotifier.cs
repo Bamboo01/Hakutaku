@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   LinkAttemptNotifier.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines LinkAttemptNotifier. When someone tries to link an
+        email that already belongs to an account, it mails the real owner a
+        heads-up, at most once per address per hour. It is a singleton
+        because the memory of who was already told has to outlive a request.
+
+        Used by LinkEmail.cs. Sends through IEmailSender.
+**************************************************************************/
 using Microsoft.Extensions.Caching.Memory;
 using server.SEmail;
 

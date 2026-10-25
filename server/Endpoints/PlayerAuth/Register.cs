@@ -1,3 +1,18 @@
+/*!************************************************************************
+\file   Register.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/players/register route, which always
+        makes a brand new guest. The server mints the device token (the
+        guest's only credential) and returns it once, along with a session
+        token. The hardware id is only recorded and never used to find or
+        sign anyone in.
+
+        Mapped in PlayerAuthRoutes.cs with the player-register rate limit.
+        Uses PlayerSessionService, and only the hash of the device token is
+        stored (see PlayerIdentityService).
+**************************************************************************/
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using server.Constants;

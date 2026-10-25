@@ -1,3 +1,18 @@
+/*!************************************************************************
+\file   LoginWithDevice.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/players/login/device route, which
+        signs a guest in with the device token that register gave them. It
+        never creates anything: an unknown token is a 401, so the game can
+        offer "new game" or "I have an account" instead of quietly starting
+        a fresh player.
+
+        Mapped in PlayerAuthRoutes.cs with the player-device-login rate
+        limit. Uses PlayerIdentityService to look up the token and
+        PlayerSessionService to issue the session.
+**************************************************************************/
 using server.Constants;
 using server.Models;
 using server.Services;

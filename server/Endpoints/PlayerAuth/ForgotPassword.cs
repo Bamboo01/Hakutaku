@@ -1,3 +1,17 @@
+/*!************************************************************************
+\file   ForgotPassword.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/players/password/forgot route, which
+        mails a reset code to a verified email. The answer is always the
+        same whether or not the email exists, so the route cannot be used to
+        find out who has an account.
+
+        Mapped in PlayerAuthRoutes.cs with the player-mail rate limit. Uses
+        EmailCodeService and IEmailSender. The code is redeemed by
+        ResetPassword.cs.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Constants;
 using server.Models;

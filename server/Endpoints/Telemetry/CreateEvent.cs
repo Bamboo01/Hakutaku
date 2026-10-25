@@ -1,3 +1,17 @@
+/*!************************************************************************
+\file   CreateEvent.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/events route, which saves a
+        telemetry event for an existing player. The request record carries
+        only a player id, an event type and the data, so the id and the time
+        are always the server's. The data must be valid JSON within the size
+        limit.
+
+        Mapped in TelemetryRoutes.cs. Uses Limits, DbErrors and
+        EventResponse.
+**************************************************************************/
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;

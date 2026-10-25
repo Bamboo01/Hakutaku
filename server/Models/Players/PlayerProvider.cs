@@ -1,3 +1,13 @@
+/*!************************************************************************
+\file   PlayerProvider.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the PlayerProvider enum, the kinds of identity a
+        player can have: device, email and steam.
+
+        Used by PlayerIdentity and PlayerIdentityService.
+**************************************************************************/
 namespace server.Models
 {
     public enum PlayerProvider : short

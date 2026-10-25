@@ -1,3 +1,16 @@
+/*!************************************************************************
+\file   HakutakuHttp.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines HakutakuHttp, the only part of the SDK that
+        touches the network or JSON. It sends every request through one
+        shared HttpClient, puts the session token on each request, and turns
+        failures into HakutakuError values instead of exceptions.
+
+        Called by HakutakuClientInstanceAPI.cs, using the routes and shapes
+        in ServerContract.cs.
+**************************************************************************/
 #nullable enable
 
 using System;

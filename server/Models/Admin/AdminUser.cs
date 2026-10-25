@@ -1,3 +1,14 @@
+/*!************************************************************************
+\file   AdminUser.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the AdminUser model: an admin account with a
+        unique username, an optional email, the Argon2id password hash and a
+        role. Deactivated admins are kept, with a time marking when.
+
+        Table mapped in Db.cs. Sessions refer to it through AdminSession.
+**************************************************************************/
 namespace server.Models
 {
     public class AdminUser

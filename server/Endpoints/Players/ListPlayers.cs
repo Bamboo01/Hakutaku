@@ -1,3 +1,14 @@
+/*!************************************************************************
+\file   ListPlayers.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the GET /api/players route, which lists every
+        player with just the names of the providers they have linked. The
+        identities themselves stay out, because emails are personal data.
+
+        Mapped in PlayerRoutes.cs (admin only).
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Models;
 using server.Services;

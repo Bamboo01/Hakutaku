@@ -1,3 +1,17 @@
+/*!************************************************************************
+\file   EmailCodeService.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines EmailCodeService, which makes and redeems the
+        6-digit codes mailed for verifying an email and resetting a
+        password. Codes expire, allow only a few wrong tries, and can only
+        be re-sent once a minute.
+
+        Used by LinkEmail.cs, ResendEmail.cs, VerifyEmail.cs,
+        ForgotPassword.cs and ResetPassword.cs. Stores PlayerEmailCode rows
+        and mails through IEmailSender.
+**************************************************************************/
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using server.Auth;

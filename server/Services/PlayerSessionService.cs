@@ -1,3 +1,14 @@
+/*!************************************************************************
+\file   PlayerSessionService.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines PlayerSessionService, which makes a player session
+        at sign-in and finds the player from a Bearer token. Sessions last
+        30 days, and only the hash of the token is stored.
+
+        Used by the player auth handlers. Stores PlayerSession rows.
+**************************************************************************/
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;

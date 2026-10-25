@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   ConfigKeys.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the names of the settings read from configuration,
+        such as the owner password and the SMTP settings. As environment
+        variables the colon becomes a double underscore, so Smtp:Host is
+        Smtp__Host.
+
+        Read by OwnerSeeder, EmailSetup and SmtpEmailSender.
+**************************************************************************/
 namespace server.Constants
 {
     // names of settings read from config. as env vars the colon becomes a double underscore

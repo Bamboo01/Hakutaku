@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   SmtpEmailSender.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines SmtpEmailSender, which sends real email through an
+        SMTP server. Its settings are Smtp:Host, Smtp:Port, Smtp:User,
+        Smtp:Password and Smtp:From.
+
+        Implements IEmailSender. Chosen in EmailSetup.cs when Smtp:Host is
+        set. Setting names are in ConfigKeys.cs.
+**************************************************************************/
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;

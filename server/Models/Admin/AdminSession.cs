@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   AdminSession.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the AdminSession model: one row per admin login.
+        It keeps the hash of the session token (never the raw token), the
+        IP, and the idle and absolute expiry times.
+
+        Table mapped in Db.cs. Belongs to an AdminUser. Read and written by
+        AdminSessionService.
+**************************************************************************/
 using System.Net;
 
 namespace server.Models

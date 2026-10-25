@@ -1,3 +1,17 @@
+/*!************************************************************************
+\file   CreateCharacter.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/characters route, which saves a
+        character for an existing player. The request record carries only a
+        player id and a name, so a client cannot pick the character's id or
+        sneak in a new player. An unknown player id gets a 400.
+
+        Mapped in CharacterRoutes.cs. Uses Limits for the name length,
+        DbErrors to spot a missing player and CharacterResponse for the
+        reply.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Constants;
 using server.Models;

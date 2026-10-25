@@ -1,3 +1,13 @@
+/*!************************************************************************
+\file   ListEvents.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the GET /api/events route, which returns every
+        telemetry event as EventResponse records. There is no paging yet.
+
+        Mapped in TelemetryRoutes.cs.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Models;
 

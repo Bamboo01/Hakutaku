@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   OwnerSeeder.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines OwnerSeeder, which creates the owner account
+        (username admin) on first start when there are no admins yet. The
+        password comes from HAKUTAKU_ADMIN_PASSWORD, or is generated and
+        logged once.
+
+        Run from Program.cs right after the migrations. Uses PasswordHasher.
+**************************************************************************/
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;

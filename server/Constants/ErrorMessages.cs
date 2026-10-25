@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   ErrorMessages.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the error messages sent by more than one route,
+        plus the ones that quote a limit. Those are built from Limits so a
+        message cannot drift from its check. Clients might compare these
+        strings, so changing one is a visible change.
+
+        Built from Limits.cs. Used by the handlers and by ApiErrors.cs.
+**************************************************************************/
 namespace server.Constants
 {
     // messages sent by more than one route, plus the ones that quote a limit. a message only used once

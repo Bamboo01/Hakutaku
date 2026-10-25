@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   ResendEmail.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/players/email/resend route. It needs
+        the player token and mails a new verification code, at most once a
+        minute per player.
+
+        Mapped in PlayerAuthRoutes.cs with the player-mail rate limit. Uses
+        EmailCodeService and IEmailSender.
+**************************************************************************/
 using server.Constants;
 using server.Models;
 using server.SEmail;

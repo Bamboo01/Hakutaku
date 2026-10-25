@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   SetDisplayName.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the POST /api/players/display-name route. It needs
+        the player token and sets or replaces the player's display name,
+        trimmed and checked against the length rules.
+
+        Mapped in PlayerAuthRoutes.cs. Uses PlayerSessionService to find the
+        caller and PlayerInputRules to check the name.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Constants;
 using server.Models;

@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   PlayerIdentity.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the PlayerIdentity model: one way a player can
+        prove who they are, such as a device token or an email. A player can
+        have several, and linking adds a row instead of replacing one.
+
+        Belongs to a Player. Looked up by PlayerIdentityService. Table
+        mapped in Db.cs.
+**************************************************************************/
 namespace server.Models
 {
     // one way a player can prove who they are. a player can have several (device + email, say),

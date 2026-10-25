@@ -1,3 +1,15 @@
+/*!************************************************************************
+\file   PlayerSession.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the PlayerSession model: one row per player login.
+        It keeps the hash of the Bearer token (never the raw token) and its
+        expiry and revocation times.
+
+        Belongs to a Player. Created and read by PlayerSessionService. Table
+        mapped in Db.cs.
+**************************************************************************/
 namespace server.Models
 {
     public class PlayerSession
