@@ -14,11 +14,10 @@ namespace server.Endpoints.PlayerAuth
     {
         // post /api/players/link/email: needs the player token. adds an email + password and mails a
         // verification code. the device token keeps working until the email is verified, so a typo'd
-        // address can't strand a guest. no rate limit: it needs a session, and the cheap checks run
-        // before the argon2 hash, so the expensive part happens at most once per session
+        // address can't strand a guest
         public static async Task<IResult> Handle(
-            Db db, PlayerSessionService sessions, EmailCodeService codes, IEmailSender mail, ILoggerFactory logs,
-            HttpContext http, LinkEmailRequest request)
+            Db db, PlayerSessionService sessions, EmailCodeService codes, LinkAttemptNotifier notifier,
+            IEmailSender mail, ILoggerFactory logs, HttpContext http, LinkEmailRequest request)
         {
             var player = await sessions.FindBySession(http);
             if (player is null)
@@ -29,32 +28,45 @@ namespace server.Endpoints.PlayerAuth
                 || request.Password.Length < Limits.MinPasswordLength || request.Password.Length > Limits.MaxPasswordLength)
                 return Results.BadRequest(new { error = ErrorMessages.LinkEmailInvalid });
 
+            // this one is about the caller's own account, so it's fine to say it out loud
             if (await db.PlayerIdentities.AnyAsync(i => i.PlayerId == player.Id && i.Provider == PlayerProvider.Email))
                 return Results.Json(new { error = ErrorMessages.EmailAlreadyLinked }, statusCode: StatusCodes.Status409Conflict);
-            if (await db.PlayerIdentities.AnyAsync(i => i.Provider == PlayerProvider.Email && i.Subject == email))
-                return Results.Json(new { error = ErrorMessages.EmailInUse }, statusCode: StatusCodes.Status409Conflict);
 
-            db.PlayerIdentities.Add(new PlayerIdentity
-            {
-                PlayerId = player.Id,
-                Provider = PlayerProvider.Email,
-                Subject = email,
-                Email = email,
-                PwHash = PasswordHasher.Hash(request.Password),
-            });
+            // hashed before we know whether the email is taken, so a taken email costs the same as a free one
+            var pwHash = PasswordHasher.Hash(request.Password);
 
-            try
+            var takenByAnother = await db.PlayerIdentities.AnyAsync(i => i.Provider == PlayerProvider.Email && i.Subject == email);
+            if (!takenByAnother)
             {
-                await db.SaveChangesAsync();
+                db.PlayerIdentities.Add(new PlayerIdentity
+                {
+                    PlayerId = player.Id,
+                    Provider = PlayerProvider.Email,
+                    Subject = email,
+                    Email = email,
+                    PwHash = pwHash,
+                });
+
+                try
+                {
+                    await db.SaveChangesAsync();
+                }
+                catch (DbUpdateException e) when (DbErrors.IsUniqueViolation(e))
+                {
+                    // either this player linked a second email at the same moment, or someone else took this one
+                    // a moment ago. the violated index's name tells us which
+                    if (e.InnerException is PostgresException { ConstraintName: "ux_player_identities_one_email" })
+                        return Results.Json(new { error = ErrorMessages.EmailAlreadyLinked }, statusCode: StatusCodes.Status409Conflict);
+                    takenByAnother = true;
+                }
             }
-            catch (DbUpdateException e) when (PlayerIdentityService.IsUniqueViolation(e))
+
+            if (takenByAnother)
             {
-                // either this player linked a second email at the same moment, or someone else took this one.
-                // the violated index's name tells us which
-                var oneEmailPerPlayer = e.InnerException is PostgresException { ConstraintName: "ux_player_identities_one_email" };
-                return Results.Json(
-                    new { error = oneEmailPerPlayer ? ErrorMessages.EmailAlreadyLinked : ErrorMessages.EmailInUse },
-                    statusCode: StatusCodes.Status409Conflict);
+                // same answer as a real link, so this route can't be used to find out which emails have
+                // accounts. no code is made for the caller, and the real owner gets a heads-up instead
+                notifier.NotifyOwner(email);
+                return Results.Ok(new { provider = PlayerIdentityService.ProviderName(PlayerProvider.Email), email, verified = false, verificationSent = true });
             }
 
             // the link is already saved so a mail failure shouldn't undo it, they can ask for another

@@ -229,8 +229,6 @@ Dev ports come from `server/Properties/launchSettings.json`: `5008` for HTTP,
 
 ## Known rough edges
 
-- **A bad `playerId` returns a generic `500`.** The foreign-key violation is not
-  caught and turned into a `400`.
 - **No validation layer.** Only auth does input checking, by hand.
 - **List endpoints return the whole table.** No paging, no filtering, no `PUT`
   or `DELETE` on game data.

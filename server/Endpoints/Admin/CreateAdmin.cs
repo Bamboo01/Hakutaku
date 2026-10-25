@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using server.Auth;
 using server.Constants;
 using server.Models;
+using server.Services;
 
 namespace server.Endpoints.Admin
 {
@@ -34,7 +34,7 @@ namespace server.Endpoints.Admin
             {
                 await db.SaveChangesAsync();
             }
-            catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23505" })
+            catch (DbUpdateException e) when (DbErrors.IsUniqueViolation(e))
             {
                 // unique violation = username already taken (ignoring case)
                 return Results.Json(new { error = "username already taken" }, statusCode: StatusCodes.Status409Conflict);

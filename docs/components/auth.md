@@ -361,7 +361,7 @@ settings and the same hash-only token storage. The differences:
 | Token transport | `HttpOnly` cookie | `Authorization: Bearer <token>` header — the callers are game clients, not browsers |
 | Lifetime | 30 min idle + 12 h absolute | one fixed 30 days, no idle timeout |
 | Ways in | username + password | device token (`login/device`) while a guest, then email + password (`login/email`) |
-| Rate limits | `admin-login` | `player-register`, `player-device-login`, `player-login` and `player-mail` (verify, resend, forgot, reset), 5 per minute per IP each |
+| Rate limits | `admin-login` | `player-register`, `player-device-login`, `player-login`, `player-link` and `player-mail` (verify, resend, forgot, reset), 5 per minute per IP each |
 
 How a player gets in:
 
@@ -434,7 +434,16 @@ account whose email they can request a reset for.
 Known gaps, on purpose for now:
 
 - **Unverified emails are still claims.** Someone can link an address that isn't
-  theirs and block its owner from linking it. Nothing expires or reclaims these.
+  theirs and hold it before its owner does. Because `link/email` answers the same
+  for a taken email (so it can't be used to look up who has an account), the real
+  owner just gets no code, plus a heads-up email. Nothing expires or reclaims these.
+- **`verify` and `resend` still behave differently after a link that hit a taken
+  email**: they say "no email is linked" where a real pending link says "invalid or
+  expired code". So the lookup leak is closed on `link/email` itself but can still be
+  inferred through those two routes.
+- **Timing is only roughly equal.** A taken email and a free one both pay for the
+  password hash, but a real link also waits on the mail server. Locally (no smtp) the
+  two are within noise; with a real mail server the free path is slower.
 - **A guest's device token never expires**, and there's no way to revoke one
   short of verifying an email. A guest whose token leaks has no recourse until
   they link and verify one.

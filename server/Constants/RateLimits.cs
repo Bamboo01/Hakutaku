@@ -20,6 +20,9 @@ namespace server.Constants
         // guess a code, so they share one limit
         public const string PlayerMail = "player-mail";
 
+        // link email hashes a password and can send mail, and a session is free to get, so it is limited too
+        public const string PlayerLink = "player-link";
+
         // every policy allows this many requests per client ip in each window
         public const int PermitLimit = 5;
         public static readonly TimeSpan Window = TimeSpan.FromMinutes(1);

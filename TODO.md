@@ -61,8 +61,11 @@ first start against an empty database.
       set in `/var/lib/jenkins/hakutaku.env` on the VM, production only writes
       the codes to the app log, and nobody gets an email. It also needs a sender
       address that mail providers will accept, which a `nip.io` domain is not.
-- [ ] Unverified emails can still be claimed by someone else, blocking the real
-      owner; decide whether they should expire or be reclaimable. Also: no way
+- [ ] Unverified emails can still be claimed by someone else, so the real
+      owner gets no code (link/email answers the same for a taken email, to avoid
+      leaking who has an account); decide whether they should expire or be
+      reclaimable. `verify` and `resend` still give a taken-email caller away.
+      Also: no way
       to change or unlink an email, and old sessions and codes are never deleted
 - [ ] **A player token only unlocks the email routes.** `/api/characters` and
       `/api/events` are still admin-gated, and there is no player logout, no

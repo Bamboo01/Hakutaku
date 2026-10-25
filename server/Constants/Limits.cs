@@ -15,5 +15,12 @@ namespace server.Constants
         // playfab's limits for a display name
         public const int DisplayNameMinLength = 3;
         public const int DisplayNameMaxLength = 25;
+
+        // character names and telemetry events. the data cap is bytes (not characters) since that's
+        // what actually gets stored, and the whole list endpoint returns every row
+        public const int CharacterNameMinLength = 1;
+        public const int CharacterNameMaxLength = 50;
+        public const int EventTypeMaxLength = 100;
+        public const int EventDataMaxBytes = 10_000;
     }
 }

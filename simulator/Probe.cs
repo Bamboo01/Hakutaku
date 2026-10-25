@@ -146,8 +146,10 @@ namespace simulator
 
             if (other != null)
             {
+                // the email already belongs to player-1, but the answer must look exactly like a real link, so
+                // nobody can use this call to find out which emails have accounts
                 var taken = await other.Client.LinkEmailAddressAsync(new LinkEmailAddressRequest { Email = player.Email, Password = MockPlayer.NewPassword() });
-                report.Check(other.Name, $"LinkEmailAddress ({player.Name}'s email)", Expect.Conflict, taken.Error);
+                report.Check(other.Name, $"LinkEmailAddress ({player.Name}'s email, looks like a normal link)", Expect.Ok, taken.Error);
             }
 
             // The device token is removed when the email is verified, not when it is linked,

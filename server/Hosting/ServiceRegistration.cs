@@ -17,6 +17,10 @@ namespace server.Hosting
             services.AddScoped<EmailCodeService>();
             services.AddScoped<OwnerSeeder>();
 
+            // remembers which emails already got a "someone tried to use your email" heads-up
+            services.AddMemoryCache();
+            services.AddSingleton<LinkAttemptNotifier>();
+
             return services;
         }
     }

@@ -1,6 +1,4 @@
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
-using server.Constants;
 using server.Endpoints.Admin;
 using server.Endpoints.Characters;
 using server.Endpoints.Health;
@@ -8,7 +6,6 @@ using server.Endpoints.PlayerAuth;
 using server.Endpoints.Players;
 using server.Endpoints.Telemetry;
 using server.Hosting;
-using server.SEmail;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,21 +13,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<server.Models.Db>(o =>
     o.UseNpgsql(builder.Configuration.GetConnectionString("Db")));
 
-// real mail only if an smtp host is set, otherwise just log the message
-if (string.IsNullOrWhiteSpace(builder.Configuration[ConfigKeys.SmtpHost]))
-    builder.Services.AddSingleton<IEmailSender, LogEmailSender>();
-else
-    builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
-
-// behind caddy every request looks like it came from caddy, which breaks the per-ip rate limits
-// and the session ip. only caddy can reach the app in prod, so we trust its forwarded headers
-builder.Services.Configure<ForwardedHeadersOptions>(o =>
-{
-    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    o.KnownIPNetworks.Clear();
-    o.KnownProxies.Clear();
-});
-
+builder.Services.AddEmailSender(builder.Configuration);
+builder.Services.AddProxyHeaders();
 builder.Services.AddAppRateLimiting();
 builder.Services.AddAppServices();
 

@@ -12,7 +12,6 @@ namespace server.Constants
         public const string InvalidOrExpiredCode = "invalid or expired code";
         public const string NoEmailLinked = "no email is linked to this player";
         public const string EmailAlreadyLinked = "this player already has an email linked";
-        public const string EmailInUse = "email already in use";
 
         // for unknown /api paths and any unexpected exception. the 500 text is vague on purpose,
         // details go to the log, never to the client
@@ -36,5 +35,17 @@ namespace server.Constants
 
         public static readonly string ResetPasswordInvalid =
             $"a valid email is required and the new password must be {PasswordRange}";
+
+        // a playerId that isn't a real player, for characters and events
+        public const string NoSuchPlayer = "no such player";
+
+        public static readonly string CreateCharacterInvalid =
+            $"playerId is required and name must be {Limits.CharacterNameMinLength}-{Limits.CharacterNameMaxLength} characters";
+
+        public static readonly string CreateEventInvalid =
+            $"playerId is required and eventType must be 1-{Limits.EventTypeMaxLength} characters";
+
+        public static readonly string EventDataInvalid =
+            $"data must be valid json, up to {Limits.EventDataMaxBytes} bytes";
     }
 }

@@ -24,6 +24,7 @@ namespace server.Hosting
                 AddPerIpPolicy(RateLimits.PlayerLogin);
                 AddPerIpPolicy(RateLimits.PlayerDeviceLogin);
                 AddPerIpPolicy(RateLimits.PlayerMail);
+                AddPerIpPolicy(RateLimits.PlayerLink);
             });
         }
     }

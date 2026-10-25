@@ -7,6 +7,8 @@ namespace server.Endpoints.Characters
     {
         // get /api/characters: every character, no paging yet
         public static async Task<IResult> Handle(Db db) =>
-            Results.Ok(await db.Characters.ToListAsync());
+            Results.Ok(await db.Characters
+                .Select(c => new CharacterResponse(c.Id, c.PlayerId, c.Name))
+                .ToListAsync());
     }
 }

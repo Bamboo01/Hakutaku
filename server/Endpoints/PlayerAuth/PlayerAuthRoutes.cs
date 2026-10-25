@@ -17,7 +17,7 @@ namespace server.Endpoints.PlayerAuth
             group.MapPost("/login/email", LoginWithEmail.Handle).RequireRateLimiting(RateLimits.PlayerLogin);
 
             group.MapPost("/display-name", SetDisplayName.Handle);
-            group.MapPost("/link/email", LinkEmail.Handle);
+            group.MapPost("/link/email", LinkEmail.Handle).RequireRateLimiting(RateLimits.PlayerLink);
 
             group.MapPost("/email/verify", VerifyEmail.Handle).RequireRateLimiting(RateLimits.PlayerMail);
             group.MapPost("/email/resend", ResendEmail.Handle).RequireRateLimiting(RateLimits.PlayerMail);
