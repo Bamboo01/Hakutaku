@@ -1,7 +1,6 @@
 namespace server.Models
 {
-    // Telemetry is player-scoped, not character-scoped (see CLAUDE.md).
-    // Data holds the event-specific payload as JSON.
+    // telemetry belongs to the player, not a character (see CLAUDE.md). Data is the event's payload as json
     public class TelemetryEvent
     {
         public Guid Id { get; set; }

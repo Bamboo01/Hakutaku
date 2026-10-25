@@ -4,11 +4,10 @@ namespace server.Endpoints.PlayerAuth
 {
     public static class PlayerAuthRoutes
     {
-        // The only file that knows the URLs and the rate limits: one line per route.
-        // These are the public player routes, and each has its own handle block in
-        // caddy/Caddyfile. Routes with no rate limit need a player token instead, and
-        // check it themselves. Sessions are a Bearer token, not a cookie: the callers
-        // are game clients, not browsers.
+        // only file that knows the urls and rate limits, one line per route. these are the public player
+        // routes, each has its own handle block in caddy/Caddyfile. routes without a rate limit need a
+        // player token and check it themselves. sessions are a bearer token, not a cookie, since the
+        // callers are game clients and not browsers
         public static void MapPlayerAuthRoutes(this IEndpointRouteBuilder app)
         {
             var group = app.MapGroup("/api/players");

@@ -240,7 +240,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<server.Models.Db>();
     db.Database.Migrate();
-    await server.AdminAuth.SeedOwner(db, app.Configuration, app.Logger);
+    await scope.ServiceProvider.GetRequiredService<OwnerSeeder>().Seed();
 }
 ```
 

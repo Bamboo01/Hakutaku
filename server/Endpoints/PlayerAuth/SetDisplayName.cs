@@ -9,11 +9,11 @@ namespace server.Endpoints.PlayerAuth
 
     public static class SetDisplayName
     {
-        // POST /api/players/display-name: needs the player token. Sets or replaces the name.
-        // Not rate limited, since it needs a session and is one cheap UPDATE.
-        public static async Task<IResult> Handle(Db db, HttpContext http, PlayerDisplayNameRequest request)
+        // post /api/players/display-name: needs the player token. sets or replaces the name.
+        // no rate limit, it needs a session and it's one cheap update
+        public static async Task<IResult> Handle(Db db, PlayerSessionService sessions, HttpContext http, PlayerDisplayNameRequest request)
         {
-            var player = await PlayerSessionService.FindBySession(db, http);
+            var player = await sessions.FindBySession(http);
             if (player is null)
                 return Results.Json(new { error = ErrorMessages.NotLoggedIn }, statusCode: StatusCodes.Status401Unauthorized);
 

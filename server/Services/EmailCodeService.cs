@@ -1,33 +1,37 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
+using server.Auth;
+using server.Hosting;
 using server.Models;
+using server.SEmail;
 
 namespace server.Services
 {
-    // The 6-digit codes mailed for verifying an email and for resetting a password.
-    internal static class EmailCodeService
+    // the 6-digit codes we mail for verifying an email and resetting a password. making and
+    // redeeming a code uses the db and the clock so those need an instance, the rest is pure
+    public class EmailCodeService(Db db, TimeProvider time)
     {
         const int CodeMinutes = 15;
 
-        // Six digits is only a million guesses, so a code dies after this many wrong tries.
+        // six digits is only a million guesses, so a code dies after this many wrong tries
         const int MaxCodeAttempts = 5;
 
-        // Minimum gap between mails to one player for the same purpose, so the routes
-        // can't be used to flood someone's inbox.
+        // minimum gap between mails to one player for the same purpose, so the routes
+        // can't be used to flood someone's inbox
         internal const int ResendSeconds = 60;
 
-        // Only a hash of the code is stored, tied to the player and what it is for.
+        // only a hash of the code is stored, tied to the player and what it's for
         static byte[] HashCode(Guid playerId, EmailCodePurpose purpose, string code) =>
-            AdminAuth.HashToken($"{playerId}:{(short)purpose}:{code}");
+            TokenHasher.Hash($"{playerId}:{(short)purpose}:{code}");
 
         internal static bool LooksLikeCode(string? code) =>
             code is { Length: 6 } && code.All(char.IsAsciiDigit);
 
-        // Makes a fresh code and retires any older unused one. Returns null, creating
-        // nothing, if one was already made in the last ResendSeconds.
-        internal static async Task<string?> CreateCode(Db db, Guid playerId, EmailCodePurpose purpose)
+        // makes a fresh code and retires any older unused one. returns null (and makes nothing)
+        // if one was already made in the last ResendSeconds
+        public async Task<string?> CreateCode(Guid playerId, EmailCodePurpose purpose)
         {
-            var now = DateTime.UtcNow;
+            var now = time.UtcNow();
             var cooldownStart = now.AddSeconds(-ResendSeconds);
             if (await db.PlayerEmailCodes.AnyAsync(c => c.PlayerId == playerId && c.Purpose == purpose && c.CreatedAt > cooldownStart))
                 return null;
@@ -48,12 +52,12 @@ namespace server.Services
             return code;
         }
 
-        // Checks a submitted code against the player's newest live one and uses it up if it
-        // matches. The attempt is counted first, in the database, so parallel guesses can't
-        // get past the cap, and only one request can ever redeem a code.
-        internal static async Task<bool> RedeemCode(Db db, Guid playerId, EmailCodePurpose purpose, string submitted)
+        // checks a submitted code against the player's newest live one and uses it up if it matches.
+        // the attempt is counted first, in the db, so parallel guesses can't get past the cap,
+        // and only one request can ever redeem a code
+        public async Task<bool> RedeemCode(Guid playerId, EmailCodePurpose purpose, string submitted)
         {
-            var now = DateTime.UtcNow;
+            var now = time.UtcNow();
             var entry = await db.PlayerEmailCodes
                 .Where(c => c.PlayerId == playerId && c.Purpose == purpose
                     && c.UsedAt == null && c.ExpiresAt > now && c.Attempts < MaxCodeAttempts)
@@ -75,6 +79,8 @@ namespace server.Services
             return used == 1;
         }
 
+        // takes the sender as a parameter and touches nothing else, so it stays static. the forgot-password
+        // route also calls it from a background task, where a request-scoped service wouldn't be safe
         internal static Task SendCodeMail(IEmailSender mail, string to, EmailCodePurpose purpose, string code)
         {
             var (subject, what) = purpose == EmailCodePurpose.Verify

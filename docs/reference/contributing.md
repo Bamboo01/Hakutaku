@@ -193,7 +193,7 @@ flowchart LR
 
 Anything in these areas should get a second pair of eyes before merging:
 
-- **`server/AdminAuth.cs`** — hashing, sessions, cookies, role checks. The
+- **`server/Auth/`** — hashing, sessions, cookies, role checks. The
   ["things not to do" table](../components/auth.md#things-not-to-do) exists
   because each row is a plausible, wrong-looking-right change.
 - **`caddy/Caddyfile`** — every line is public exposure.

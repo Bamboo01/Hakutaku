@@ -1,7 +1,7 @@
 namespace server.Models
 {
-    // A Player can have multiple characters. No independent progress/stats of
-    // their own yet -- that's tracked on Player -- so this is just identity.
+    // a player can have several characters. no progress or stats of their own yet (that's on
+    // Player), so for now it's just an identity
     public class Character
     {
         public Guid Id { get; set; }

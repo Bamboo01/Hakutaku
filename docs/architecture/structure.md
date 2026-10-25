@@ -6,12 +6,12 @@
 Hakutaku/
 ├── server/                  ASP.NET Core 10 API (also serves the built UI)
 │   ├── Program.cs           Entry point: DI, middleware, and the Map…Routes() calls
-│   ├── AdminAuth.cs         Shared auth helpers: hashing, admin sessions, guards
-│   ├── EmailSender.cs       IEmailSender: real SMTP, or log-only when none is set
+│   ├── Auth/                Password and token hashing, admin sessions, the RequireAdmin/RequireOwner guards
+│   ├── SEmail/              IEmailSender: real SMTP, or log-only when none is set
 │   ├── Endpoints/           One folder per route group: a routes file + one handler per route
-│   ├── Services/            Helpers the player routes share (sessions, identities, codes)
+│   ├── Services/            Injected services the player routes share (sessions, identities, codes) plus the pure input rules
 │   ├── Constants/           Policy names, limits, error messages, config keys
-│   ├── Hosting/             Startup pieces: the JSON 404 and 500 handlers
+│   ├── Hosting/             Startup pieces: service registration, rate limits, the owner account, the JSON 404 and 500 handlers
 │   ├── Models/
 │   │   ├── Db.cs            The DbContext and the table mappings
 │   │   ├── Admin/           AdminUser, AdminSession, AdminRole
@@ -97,14 +97,14 @@ public static async Task<IResult> Handle(Db db) =>
 
 A handler takes the `DbContext` by injection, does its query, and returns a
 result. `Program.cs` calls each group's `Map…Routes()` explicitly. The groups
-are characters, players, telemetry, admin and player auth (nine routes, with their
-helpers in `Services/`).
-
+There is no repository interface wrapping EF Core. Logic that touches the db, the
+clock or config lives in small injected services (`Services/`, `Auth/`); pure
+helpers (hashing, input checks) stay static.
 There is no repository interface wrapping EF Core, and no service class in
 between. At this size that indirection would be pure cost.
 
-Auth still has shared helpers in `AdminAuth.cs` (a static class: session lookup,
-role checks, password hashing). They earned their own file because the logic is
+Auth has its own folder, `Auth/`: static password and token hashing, and the injected
+`AdminSessionService` (session lookup, the owner check). It earned its own place because the logic is
 genuinely shared and genuinely subtle. The admin routes themselves are in
 `Endpoints/Admin/`.
 
@@ -114,10 +114,10 @@ There is no ASP.NET Identity and no `[Authorize]`. Two primitives do the work:
 
 - `.RequireAdmin()` — a chainable extension method you append to a route, like
   `.RequireRateLimiting(...)`. Lets in any signed-in admin **or** the owner.
-- `RequireOwner(db, http)` — called *inside* a handler when only the owner
+- `sessions.RequireOwner(http)` — called *inside* a handler when only the owner
   should get through, because it needs to return a specific `403`.
 
-Both are in `AdminAuth.cs`. See [Auth and sessions](../components/auth.md).
+`RequireAdmin` is in `Auth/AdminGuards.cs`, `RequireOwner` in `Auth/AdminSessionService.cs`. See [Auth and sessions](../components/auth.md).
 
 ### Migrations run themselves
 

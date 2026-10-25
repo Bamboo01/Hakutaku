@@ -6,7 +6,7 @@ namespace server.Models
     {
         public Db(DbContextOptions<Db> options) : base(options) { }
 
-        // One DbSet per table.
+        // one DbSet per table
         public DbSet<Player> Players => Set<Player>();
         public DbSet<Character> Characters => Set<Character>();
         public DbSet<TelemetryEvent> TelemetryEvents => Set<TelemetryEvent>();
@@ -16,15 +16,15 @@ namespace server.Models
         public DbSet<PlayerSession> PlayerSessions => Set<PlayerSession>();
         public DbSet<PlayerEmailCode> PlayerEmailCodes => Set<PlayerEmailCode>();
 
-        // The admin and player-auth tables follow the TDD conventions (snake_case names,
-        // bigint identity keys where a row has its own key).
+        // admin and player-auth tables follow the tdd conventions: snake_case names, and bigint
+        // identity keys where a row has its own key
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<PlayerIdentity>(e =>
             {
                 e.ToTable("player_identities", t => t.HasCheckConstraint("ck_player_identities_provider", "provider IN (0, 1, 2)"));
-                // (provider, subject) is the key because one device token, email or Steam
-                // account must map to at most one player, and it makes lookups by credential cheap.
+                // (provider, subject) is the key: one device token, email or steam account maps to at most
+                // one player, and lookups by credential stay cheap
                 e.HasKey(x => new { x.Provider, x.Subject });
                 e.Property(x => x.PlayerId).HasColumnName("player_id");
                 e.Property(x => x.Provider).HasColumnName("provider");
@@ -33,7 +33,7 @@ namespace server.Models
                 e.Property(x => x.PwHash).HasColumnName("pw_hash");
                 e.Property(x => x.LinkedAt).HasColumnName("linked_at").HasDefaultValueSql("now()");
                 e.Property(x => x.VerifiedAt).HasColumnName("verified_at");
-                // At most one email per player, enforced here rather than only in the handler.
+                // at most one email per player, enforced here and not only in the handler
                 e.HasIndex(x => x.PlayerId).HasFilter("provider = 1").IsUnique().HasDatabaseName("ux_player_identities_one_email");
                 e.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.PlayerId).OnDelete(DeleteBehavior.Cascade);
             });

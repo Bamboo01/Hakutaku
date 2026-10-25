@@ -10,20 +10,20 @@ namespace server.Endpoints.PlayerAuth
 
     public static class Register
     {
-        // POST /api/players/register: makes a new guest player, every time. The server mints
-        // the device token (the guest's only credential) and returns it once. The game keeps
-        // it and signs in with login/device from then on.
-        public static async Task<IResult> Handle(Db db, PlayerRegisterRequest request)
+        // post /api/players/register: makes a brand new guest every time. the server mints the device
+        // token (the guest's only credential) and returns it once, the game keeps it and uses
+        // login/device from then on
+        public static async Task<IResult> Handle(Db db, PlayerSessionService sessions, PlayerRegisterRequest request)
         {
-            // The hardware ID (e.g. Unity's SystemInfo.deviceUniqueIdentifier) is only recorded,
-            // for support and abuse tracking. It isn't secret, so it never finds or signs in a player.
+            // hardware id (e.g. unity's SystemInfo.deviceUniqueIdentifier) is only recorded, for support and
+            // abuse tracking. it isn't secret so it never finds or signs in a player
             var hardwareId = request.HardwareId?.Trim();
             if (string.IsNullOrEmpty(hardwareId) || hardwareId.Length > Limits.MaxIdentifierLength)
                 return Results.BadRequest(new { error = ErrorMessages.HardwareIdRequired });
             if (!PlayerInputRules.TryNormalizeDisplayName(request.DisplayName, out var displayName))
                 return Results.BadRequest(new { error = ErrorMessages.DisplayNameRule });
 
-            // 32 random bytes. Only the hash of this is stored (see HashDeviceToken).
+            // 32 random bytes. only the hash of this is stored (see HashDeviceToken)
             var deviceToken = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
             var player = new Player { DisplayName = displayName, RegisteredHardwareId = hardwareId };
             db.Players.Add(player);
@@ -35,7 +35,7 @@ namespace server.Endpoints.PlayerAuth
             });
             await db.SaveChangesAsync();
 
-            var (token, expiresAt) = await PlayerSessionService.IssueSession(db, player.Id);
+            var (token, expiresAt) = await sessions.IssueSession(player.Id);
             return Results.Ok(new { id = player.Id, displayName = player.DisplayName, xp = player.Xp, deviceToken, token, expiresAt });
         }
     }

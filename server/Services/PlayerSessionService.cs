@@ -1,36 +1,38 @@
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
+using server.Auth;
+using server.Hosting;
 using server.Models;
 
 namespace server.Services
 {
-    // Player login sessions: making one at sign-in, and finding the player from a Bearer token.
-    internal static class PlayerSessionService
+    // player login sessions: making one at sign-in, and finding the player from a bearer token
+    public class PlayerSessionService(Db db, TimeProvider time)
     {
-        // One fixed lifetime. The design gives player_sessions an expiry but no idle column,
-        // so this is not the admin session's idle + absolute pair.
+        // one fixed lifetime. player_sessions only has an expiry, no idle column, so there's no
+        // idle + absolute pair like the admin sessions have
         const int SessionDays = 30;
 
-        // Only the hash is stored, so a token can be handed out exactly once. That is why
-        // every register or login makes a fresh session instead of reusing one.
-        internal static async Task<(string Token, DateTime ExpiresAt)> IssueSession(Db db, Guid playerId)
+        // only the hash is stored, so a token can only be handed out once. that's why every register
+        // or login makes a fresh session instead of reusing one
+        public async Task<(string Token, DateTime ExpiresAt)> IssueSession(Guid playerId)
         {
             var token = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
-            var expiresAt = DateTime.UtcNow.AddDays(SessionDays);
+            var expiresAt = time.UtcNow().AddDays(SessionDays);
             db.PlayerSessions.Add(new PlayerSession
             {
                 PlayerId = playerId,
-                TokenHash = AdminAuth.HashToken(token),
+                TokenHash = TokenHasher.Hash(token),
                 ExpiresAt = expiresAt,
             });
             await db.SaveChangesAsync();
             return (token, expiresAt);
         }
 
-        // Reads "Authorization: Bearer <token>" and returns the player it belongs to, or
-        // null if there is no token or it is unknown, revoked or expired.
-        internal static async Task<Player?> FindBySession(Db db, HttpContext http)
+        // reads "Authorization: Bearer <token>" and returns the player it belongs to, or null if
+        // there's no token or it's unknown, revoked or expired
+        public async Task<Player?> FindBySession(HttpContext http)
         {
             var header = http.Request.Headers.Authorization.ToString();
             const string prefix = "Bearer ";
@@ -39,8 +41,8 @@ namespace server.Services
             var token = header[prefix.Length..].Trim();
             if (token.Length == 0) return null;
 
-            var hash = AdminAuth.HashToken(token);
-            var now = DateTime.UtcNow;
+            var hash = TokenHasher.Hash(token);
+            var now = time.UtcNow();
             return await db.PlayerSessions
                 .Where(s => s.TokenHash == hash && s.RevokedAt == null && s.ExpiresAt > now)
                 .Join(db.Players, s => s.PlayerId, p => p.Id, (s, p) => p)

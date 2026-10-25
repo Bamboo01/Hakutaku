@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using server.Auth;
 using server.Constants;
 using server.Models;
 using server.Services;
@@ -9,8 +10,8 @@ namespace server.Endpoints.PlayerAuth
 
     public static class LoginWithEmail
     {
-        // POST /api/players/login/email: signs in with a verified email and password.
-        public static async Task<IResult> Handle(Db db, LoginWithEmailRequest request)
+        // post /api/players/login/email: signs in with a verified email + password
+        public static async Task<IResult> Handle(Db db, PlayerSessionService sessions, LoginWithEmailRequest request)
         {
             var email = PlayerInputRules.NormalizeEmail(request.Email);
             if (email is null || string.IsNullOrEmpty(request.Password) || request.Password.Length > Limits.MaxPasswordLength)
@@ -20,19 +21,19 @@ namespace server.Endpoints.PlayerAuth
                 .Include(i => i.Player)
                 .FirstOrDefaultAsync(i => i.Provider == PlayerProvider.Email && i.Subject == email);
 
-            // An unknown email still checks a dummy hash, so a miss takes as long as a wrong
-            // password and the answer never says which emails exist (same rule as admin login).
-            var passwordOk = AdminAuth.VerifyPassword(identity?.PwHash ?? AdminAuth.DummyHash, request.Password);
+            // unknown email still checks a dummy hash, so a miss takes as long as a wrong password and
+            // never says which emails exist (same rule as admin login)
+            var passwordOk = PasswordHasher.Verify(identity?.PwHash ?? PasswordHasher.DummyHash, request.Password);
             if (identity is null || !passwordOk)
                 return Results.Json(new { error = ErrorMessages.InvalidCredentials }, statusCode: StatusCodes.Status401Unauthorized);
 
-            // An email is only a way in once verified. Until then the player is still a guest on
-            // their device token. This comes after the password check, so only someone who
-            // knows the password learns that the email is unverified.
+            // an email only counts as a way in once verified, until then they're still a guest on their
+            // device token. this check comes after the password one, so only someone who knows the
+            // password finds out the email is unverified
             if (identity.VerifiedAt is null)
                 return Results.Json(new { error = "this email isn't verified yet; enter the code mailed to it first" }, statusCode: StatusCodes.Status403Forbidden);
 
-            var (token, expiresAt) = await PlayerSessionService.IssueSession(db, identity.PlayerId);
+            var (token, expiresAt) = await sessions.IssueSession(identity.PlayerId);
             return Results.Ok(new { id = identity.PlayerId, displayName = identity.Player.DisplayName, xp = identity.Player.Xp, token, expiresAt });
         }
     }

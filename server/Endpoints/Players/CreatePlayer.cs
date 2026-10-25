@@ -8,9 +8,8 @@ namespace server.Endpoints.Players
 
     public static class CreatePlayer
     {
-        // POST /api/players: an admin makes a player. It has no way to sign in, because
-        // credentials only come from the player routes (register mints a device token,
-        // link/email adds an email).
+        // post /api/players: an admin makes a player. it can't sign in, since credentials only come from the
+        // player routes (register mints a device token, link/email adds an email)
         public static async Task<IResult> Handle(Db db, AdminCreatePlayerRequest request)
         {
             if (!PlayerInputRules.TryNormalizeDisplayName(request.DisplayName, out var displayName))

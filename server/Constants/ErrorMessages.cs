@@ -1,13 +1,12 @@
 namespace server.Constants
 {
-    // The messages that more than one route sends, plus the ones that quote a limit.
-    // A message used in only one place otherwise stays next to its route. Clients may
-    // compare these strings, so changing one is a visible change.
+    // messages sent by more than one route, plus the ones that quote a limit. a message only used once
+    // stays next to its route. clients might compare these strings, so changing one is a visible change
     public static class ErrorMessages
     {
         public const string NotLoggedIn = "not logged in";
 
-        // The same for a wrong password and an unknown account, so it never says which.
+        // same for a wrong password and an unknown account, so it never says which
         public const string InvalidCredentials = "invalid credentials";
 
         public const string InvalidOrExpiredCode = "invalid or expired code";
@@ -15,12 +14,12 @@ namespace server.Constants
         public const string EmailAlreadyLinked = "this player already has an email linked";
         public const string EmailInUse = "email already in use";
 
-        // For a path under /api that no route matches, and for any unexpected exception.
-        // The 500 message is deliberately vague: details go to the log, never to the client.
+        // for unknown /api paths and any unexpected exception. the 500 text is vague on purpose,
+        // details go to the log, never to the client
         public const string RouteNotFound = "no such route";
         public const string ServerError = "something went wrong on the server";
 
-        // These quote a limit, so they are built from Limits.
+        // these quote a limit, so they're built from Limits
         static readonly string PasswordRange = $"{Limits.MinPasswordLength}-{Limits.MaxPasswordLength} characters";
 
         public static readonly string DisplayNameRule =

@@ -2,13 +2,13 @@ using server.Constants;
 
 namespace server.Services
 {
-    // What a player is allowed to send as a display name or an email address.
+    // what a player may send as a display name or an email
     internal static class PlayerInputRules
     {
-        // A display name is a label, not an identity: not unique and never used to sign in.
-        // So the rules are only about what can be shown: a length range once trimmed
-        // (PlayFab's limits) and no control characters, which could break a UI or a log
-        // line. Null means none was given, which is allowed. Whitespace alone is too short.
+        // a display name is just a label: not unique, never used to sign in. so the rules are only about
+        // what can be shown: a length range once trimmed (playfab's limits) and no control characters,
+        // which could break a ui or a log line. null means none was given, and that's fine.
+        // whitespace on its own is too short
         internal static bool TryNormalizeDisplayName(string? raw, out string? displayName)
         {
             displayName = raw?.Trim();
@@ -16,8 +16,8 @@ namespace server.Services
                 || (displayName.Length is >= Limits.DisplayNameMinLength and <= Limits.DisplayNameMaxLength && !displayName.Any(char.IsControl));
         }
 
-        // Trims and lowercases, then checks the address looks like one. This only stops
-        // obvious typos. It doesn't prove the address is real; the emailed code does that.
+        // trims and lowercases, then checks it looks like an email. only catches obvious typos,
+        // it doesn't prove the address is real (the emailed code does that)
         internal static string? NormalizeEmail(string? raw)
         {
             var email = raw?.Trim().ToLowerInvariant();

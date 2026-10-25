@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using server.Constants;
 using server.Models;
+using server.SEmail;
 using server.Services;
 
 namespace server.Endpoints.PlayerAuth
@@ -9,10 +10,9 @@ namespace server.Endpoints.PlayerAuth
 
     public static class ForgotPassword
     {
-        // POST /api/players/password/forgot: mails a reset code to a verified email. The answer
-        // is always the same, whether or not the email is known and verified, so it can't be used
-        // to find out which emails have accounts.
-        public static async Task<IResult> Handle(Db db, IEmailSender mail, ILoggerFactory logs, PlayerForgotRequest request)
+        // post /api/players/password/forgot: mails a reset code to a verified email. the answer is always
+        // the same whether or not the email exists, so it can't be used to find out who has an account
+        public static async Task<IResult> Handle(Db db, EmailCodeService codes, IEmailSender mail, ILoggerFactory logs, PlayerForgotRequest request)
         {
             var email = PlayerInputRules.NormalizeEmail(request.Email);
             if (email is null)
@@ -22,10 +22,10 @@ namespace server.Endpoints.PlayerAuth
                 i.Provider == PlayerProvider.Email && i.Subject == email && i.VerifiedAt != null);
             if (identity is not null)
             {
-                var code = await EmailCodeService.CreateCode(db, identity.PlayerId, EmailCodePurpose.Reset);
+                var code = await codes.CreateCode(identity.PlayerId, EmailCodePurpose.Reset);
                 if (code is not null)
                 {
-                    // Sent in the background, so a hit doesn't take noticeably longer than a miss.
+                    // sent in the background so a hit isn't noticeably slower than a miss
                     var log = logs.CreateLogger(LogCategories.PlayerAuth);
                     _ = Task.Run(async () =>
                     {

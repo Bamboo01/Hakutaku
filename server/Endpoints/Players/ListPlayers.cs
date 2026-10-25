@@ -6,9 +6,8 @@ namespace server.Endpoints.Players
 {
     public static class ListPlayers
     {
-        // GET /api/players: every player, with only the names of the providers they have
-        // linked. The identities themselves stay out: emails are personal data, and the
-        // hardware ID shouldn't show up in a casual listing either.
+        // get /api/players: every player, with just the names of the providers they've linked. the identities
+        // stay out: emails are personal data, and the hardware id shouldn't show in a casual listing
         public static async Task<IResult> Handle(Db db)
         {
             var players = await db.Players
@@ -22,7 +21,7 @@ namespace server.Endpoints.Players
                 })
                 .ToListAsync();
 
-            // Provider names are made in memory, since the database can't run our method.
+            // provider names are made in memory, the db can't run our method
             return Results.Ok(players.Select(p => new
             {
                 p.id,

@@ -27,7 +27,7 @@ Roughly in dependency order, across three workstreams: the backend build
 
 **Done for admins.** Argon2id password hashing, cookie sessions with idle and
 absolute expiry, and owner-gated admin management all live in
-`server/AdminAuth.cs`. `HAKUTAKU_ADMIN_PASSWORD` is read by `SeedOwner` on the
+`server/Auth/`, with the routes in `server/Endpoints/Admin/`. `HAKUTAKU_ADMIN_PASSWORD` is read by `OwnerSeeder` on the
 first start against an empty database.
 
 - [x] Admin entity — `admin_users` and `admin_sessions` (no separate `User`
@@ -55,7 +55,7 @@ first start against an empty database.
 - [ ] Platform sign-in (Sign in with Apple, Google, Steam) as more identity
       providers; Steam is already reserved in `PlayerProvider`
 - [x] Email verification (6-digit code, 15 min, 5 guesses) and password reset by
-      emailed code, via `IEmailSender` (`server/EmailSender.cs`; SMTP through
+      emailed code, via `IEmailSender` (`server/SEmail/`; SMTP through
       MailKit, or logged to the console when `SMTP_HOST` is unset)
 - [ ] **Configure a real SMTP server before relying on it.** Until `SMTP_*` is
       set in `/var/lib/jenkins/hakutaku.env` on the VM, production only writes

@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using server.Auth;
 using server.Constants;
 using server.Models;
+using server.SEmail;
 using server.Services;
 
 namespace server.Endpoints.PlayerAuth
@@ -10,14 +12,15 @@ namespace server.Endpoints.PlayerAuth
 
     public static class LinkEmail
     {
-        // POST /api/players/link/email: needs the player token. Adds an email and password to
-        // the player and mails a verification code. The device token keeps working until the
-        // email is verified (email/verify removes it), so a mistyped address can't strand a guest.
-        // Not rate limited: it needs a session, and the cheap existence checks run before the
-        // Argon2 hash, so the expensive work happens at most once per session.
-        public static async Task<IResult> Handle(Db db, HttpContext http, IEmailSender mail, ILoggerFactory logs, LinkEmailRequest request)
+        // post /api/players/link/email: needs the player token. adds an email + password and mails a
+        // verification code. the device token keeps working until the email is verified, so a typo'd
+        // address can't strand a guest. no rate limit: it needs a session, and the cheap checks run
+        // before the argon2 hash, so the expensive part happens at most once per session
+        public static async Task<IResult> Handle(
+            Db db, PlayerSessionService sessions, EmailCodeService codes, IEmailSender mail, ILoggerFactory logs,
+            HttpContext http, LinkEmailRequest request)
         {
-            var player = await PlayerSessionService.FindBySession(db, http);
+            var player = await sessions.FindBySession(http);
             if (player is null)
                 return Results.Json(new { error = ErrorMessages.NotLoggedIn }, statusCode: StatusCodes.Status401Unauthorized);
 
@@ -37,7 +40,7 @@ namespace server.Endpoints.PlayerAuth
                 Provider = PlayerProvider.Email,
                 Subject = email,
                 Email = email,
-                PwHash = AdminAuth.HashPassword(request.Password),
+                PwHash = PasswordHasher.Hash(request.Password),
             });
 
             try
@@ -46,20 +49,20 @@ namespace server.Endpoints.PlayerAuth
             }
             catch (DbUpdateException e) when (PlayerIdentityService.IsUniqueViolation(e))
             {
-                // Either this player linked a second email at the same moment, or someone else
-                // took this one. The name of the violated index says which.
+                // either this player linked a second email at the same moment, or someone else took this one.
+                // the violated index's name tells us which
                 var oneEmailPerPlayer = e.InnerException is PostgresException { ConstraintName: "ux_player_identities_one_email" };
                 return Results.Json(
                     new { error = oneEmailPerPlayer ? ErrorMessages.EmailAlreadyLinked : ErrorMessages.EmailInUse },
                     statusCode: StatusCodes.Status409Conflict);
             }
 
-            // The link is already saved, so a mail failure must not undo it. The player can
-            // ask for another code with /email/resend.
+            // the link is already saved so a mail failure shouldn't undo it, they can ask for another
+            // code with /email/resend
             var sent = false;
             try
             {
-                var code = await EmailCodeService.CreateCode(db, player.Id, EmailCodePurpose.Verify);
+                var code = await codes.CreateCode(player.Id, EmailCodePurpose.Verify);
                 if (code is not null)
                 {
                     await EmailCodeService.SendCodeMail(mail, email, EmailCodePurpose.Verify, code);
