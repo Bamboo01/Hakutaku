@@ -318,12 +318,21 @@ verified email can reset its password.
 | `200` | Linked |
 | `400` | Not a plausible email, or the password is the wrong length |
 | `401` | Missing, unknown, revoked or expired token |
-| `409` | This player already has an email, **or** that email belongs to someone else |
+| `409` | This player already has an email |
+| `429` | More than 5 attempts per minute from one IP |
+
+!!! note "A taken email gets the same answer as a free one"
+    If the email already belongs to another player, you still get `200` with the
+    same body as a real link, and **no code is made** for you. Instead the real
+    owner gets a heads-up email (at most one per address per hour). That way this
+    route can't be used to find out which emails have accounts. The only cost is
+    that a caller who typed someone else's address sees "code sent" and never gets
+    one.
 
 !!! warning "An unverified email can still be claimed"
     Until someone verifies it, an address is only a claim. A player who links
-    someone else's address blocks the real owner from linking it (`409`) until
-    that happens. Nothing cleans up unverified claims yet.
+    someone else's address first holds it, and the real owner's later attempt looks
+    like a normal link but no code arrives. Nothing cleans up unverified claims yet.
 
 ### Verify an email
 
@@ -414,15 +423,17 @@ curl -X POST http://localhost:5008/api/players/login/email \
 | Endpoint | Fields |
 |---|---|
 | `POST /api/players` | `xp` (integer), optional `displayName` (same rules as [above](#set-the-display-name)). The player gets no credentials, so it can't sign in: those only come from `register` and `link/email` |
-| `POST /api/characters` | `playerId` (GUID of an existing player), `name` (string) |
-| `POST /api/events` | `playerId` (GUID of an existing player), `eventType` (string), `data` (string holding JSON text) |
+| `POST /api/characters` | `playerId` (GUID of an existing player), `name` (1-50 characters, no control characters) |
+| `POST /api/events` | `playerId` (GUID of an existing player), `eventType` (1-100 characters), `data` (a string holding valid JSON, up to 10,000 bytes) |
 
-`timestamp` on an event is always set by the server in UTC. Anything you send
-for it is overwritten.
+Only those fields are read. The `id` and the `timestamp` are always set by the
+server, and anything else you send (an `id`, a nested `player`, a `timestamp`) is
+ignored. A bad body returns `400` with `{ "error": "..." }`, and a `playerId`
+that does not exist returns `400 { "error": "no such player" }`.
 
-Responses echo the created object. Character and event responses also include
-`"player": null`, which you can ignore — it is an unpopulated navigation
-property.
+Responses are small records, not the stored rows: a character is
+`{ id, playerId, name }` and an event is
+`{ id, playerId, eventType, timestamp, data }`.
 
 ### Worked example
 
@@ -445,14 +456,18 @@ curl -b cookies.txt -X POST http://localhost:5008/api/events \
 
 ## Error shapes
 
-Four different shapes, and a client has to handle all of them:
+Three shapes, and a client has to handle all of them:
 
 | Shape | Which responses |
 |---|---|
-| `{ "error": "message" }` | `400`, `401`, `403`, `404`, `409` |
+| `{ "error": "message" }` | `400`, `401`, `403`, `404`, `409`, and `500` (a generic message: details go to the log) |
 | Empty body | `204` (success), and `429` |
-| Bare `500` | A `playerId` that does not exist — an uncaught foreign-key violation |
 | `404` with empty body, `Server: Caddy` | Caddy's default-deny, not the app at all |
+
+A path under `/api` that no route matches returns `404` with `{ "error": "no such route" }`,
+including a known path called with the wrong method. An unexpected server error, such as
+anything else that goes wrong (a database failure, say), returns `500` with
+`{ "error": "something went wrong on the server" }`.
 
 `web/src/api.ts` is a working reference for handling these in one place.
 

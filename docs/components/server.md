@@ -5,7 +5,7 @@ ASP.NET Core 10, minimal APIs, two files that matter:
 | File | Holds |
 |---|---|
 | `server/Program.cs` | DI, the middleware pipeline, and the game-data endpoints |
-| `server/AdminAuth.cs` | Everything auth — covered in [Auth and sessions](auth.md) |
+| `server/Auth/` | Password and token hashing, admin sessions and guards — covered in [Auth and sessions](auth.md) |
 
 `Program.cs` reads top to bottom as the whole request pipeline. Start there.
 
@@ -84,7 +84,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<server.Models.Db>();
     db.Database.Migrate();
-    await server.AdminAuth.SeedOwner(db, app.Configuration, app.Logger);
+    await scope.ServiceProvider.GetRequiredService<OwnerSeeder>().Seed();
 }
 ```
 
@@ -169,7 +169,7 @@ static-file middleware skips any request that already matched an endpoint.
 ## Adding an endpoint
 
 1. **Pick the guard.** `.RequireAdmin()` for any signed-in admin;
-   `RequireOwner(db, http)` inside the handler when only the owner should pass.
+   `sessions.RequireOwner(http)` inside the handler when only the owner should pass.
    Nothing is unauthenticated by default.
 2. **Register it before the static-file calls.** Anywhere above
    `UseDefaultFiles()`.
@@ -180,26 +180,26 @@ static-file middleware skips any request that already matched an endpoint.
    `caddy/Caddyfile`, and admin-session auth is the wrong gate for it.
 5. **Update [the API reference](../reference/api.md)** in the same commit.
 
-A worked example, from `AdminAuth.cs`:
+A worked example, from `Endpoints/Admin/ListAdmins.cs`:
 
 ```csharp
-app.MapGet("/api/admin/admins", async (Db db, HttpContext http) =>
+public static async Task<IResult> Handle(Db db, AdminSessionService sessions, HttpContext http)
 {
-    var (_, error) = await RequireOwner(db, http);
+    var (_, error) = await sessions.RequireOwner(http);
     if (error is not null) return error;
 
-    // Materialised before projecting so RoleName stays reusable -- EF can't
-    // translate a local method into SQL. The table is tiny, so this is fine.
+    // Loaded first and shaped afterwards, because EF can't turn ToName() into SQL.
+    // The table is tiny, so this is fine.
     var admins = await db.AdminUsers.OrderBy(a => a.Id).ToListAsync();
     return Results.Ok(admins.Select(a => new
     {
         id = a.Id,
         username = a.Username,
-        role = RoleName(a.Role),
+        role = a.Role.ToName(),
         createdAt = a.CreatedAt,
         disabledAt = a.DisabledAt,
     }));
-});
+}
 ```
 
 Two things to copy: the guard runs first and returns early, and the projection
@@ -220,7 +220,7 @@ inside a container. The double underscore is the nesting separator.
 | Variable | Read by | Purpose |
 |---|---|---|
 | `ConnectionStrings__Db` | `AddDbContext` | The Postgres connection string |
-| `HAKUTAKU_ADMIN_PASSWORD` | `SeedOwner` | First owner's password, first start only |
+| `HAKUTAKU_ADMIN_PASSWORD` | `OwnerSeeder` | First owner's password, first start only |
 | `Smtp__Host`, `Smtp__Port`, `Smtp__User`, `Smtp__Password`, `Smtp__From` | `SmtpEmailSender` | Outgoing mail for verification and reset codes. With no host set, `LogEmailSender` logs the message instead |
 | `ASPNETCORE_ENVIRONMENT` | The framework | `Development` loads the dev JSON |
 
@@ -229,12 +229,8 @@ Dev ports come from `server/Properties/launchSettings.json`: `5008` for HTTP,
 
 ## Known rough edges
 
-- **A bad `playerId` returns a bare `500`.** The foreign-key violation is not
-  caught and turned into a `400`.
 - **No validation layer.** Only auth does input checking, by hand.
 - **List endpoints return the whole table.** No paging, no filtering, no `PUT`
   or `DELETE` on game data.
-- **`data.cs` still opens with "This is just sample code".** It is not; the
-  comment is stale and the backend owner has it.
 - **No tests.** The Jenkins pipeline has no test stage because there is nothing
   to run.

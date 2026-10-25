@@ -1,3 +1,18 @@
+/*!************************************************************************
+\file   Probe.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file defines the probe command of the simulator. It registers
+        mock players, takes the first through the account flows, then has
+        each player try every route beyond player auth, and compares what
+        happened with what was expected. The run exits with 1 on any
+        surprise.
+
+        Started from Program.cs. Uses MockPlayer and Report. AccessChecks
+        lists every non-player route and what a player token should get, so
+        update it when a route opens to players.
+**************************************************************************/
 using Hakutaku;
 using Hakutaku.ClientModels;
 
@@ -146,8 +161,10 @@ namespace simulator
 
             if (other != null)
             {
+                // the email already belongs to player-1, but the answer must look exactly like a real link, so
+                // nobody can use this call to find out which emails have accounts
                 var taken = await other.Client.LinkEmailAddressAsync(new LinkEmailAddressRequest { Email = player.Email, Password = MockPlayer.NewPassword() });
-                report.Check(other.Name, $"LinkEmailAddress ({player.Name}'s email)", Expect.Conflict, taken.Error);
+                report.Check(other.Name, $"LinkEmailAddress ({player.Name}'s email, looks like a normal link)", Expect.Ok, taken.Error);
             }
 
             // The device token is removed when the email is verified, not when it is linked,

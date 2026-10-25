@@ -1,151 +1,72 @@
-using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.HttpOverrides;
+/*!************************************************************************
+\file   Program.cs
+\author Choi Meng Yew
+\par    choi.m@digipen.edu
+\date   25th October 2026
+\brief  This file is the entry point of the Hakutaku server. It registers
+        the services, applies the migrations, seeds the owner account and
+        sets up the request pipeline: error handling, forwarded headers,
+        rate limiting, the route groups, then the static files and the Vue
+        fallback.
+
+        Calls the setup in Hosting/ and each Map...Routes() in Endpoints/.
+        The order matters, especially the /api catch-all being last.
+**************************************************************************/
 using Microsoft.EntityFrameworkCore;
-using server;
+using server.Endpoints.Admin;
+using server.Endpoints.Characters;
+using server.Endpoints.Health;
+using server.Endpoints.PlayerAuth;
+using server.Endpoints.Players;
+using server.Endpoints.Telemetry;
+using server.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// README:
-// dotnet ef migrations add InitialCreate
-// Reflection magic that describes schema changes
-// Everytime the Hakutaku.Server starts up, connects to postgres, then checks which migrations have been applied
-// See the migrations folder after creation
-
-// This just tells the DI container how to build the db instance. 
-// Whenever something requests a Db instance (via constructor injection), here's how to construct it.
+// tells di how to build the db context when something asks for one
 builder.Services.AddDbContext<server.Models.Db>(o =>
     o.UseNpgsql(builder.Configuration.GetConnectionString("Db")));
 
-// Real mail only when an SMTP host is configured; otherwise messages are just logged.
-if (string.IsNullOrWhiteSpace(builder.Configuration["Smtp:Host"]))
-    builder.Services.AddSingleton<IEmailSender, LogEmailSender>();
-else
-    builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+builder.Services.AddEmailSender(builder.Configuration);
+builder.Services.AddProxyHeaders();
+builder.Services.AddAppRateLimiting();
+builder.Services.AddAppServices();
 
-// Behind Caddy every request would otherwise appear to come from Caddy itself, which would make
-// the per-IP login limit and the session IP useless. Only Caddy can reach this container in
-// production (compose.yaml publishes no port for it), so its forwarded headers are trusted.
-builder.Services.Configure<ForwardedHeadersOptions>(o =>
-{
-    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    o.KnownIPNetworks.Clear();
-    o.KnownProxies.Clear();
-});
-
-builder.Services.AddRateLimiter(o =>
-{
-    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    o.AddPolicy("admin-login", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
-    // Public and unauthenticated (see PlayerAuth.cs), so this is the only thing standing
-    // between registration and someone hammering it to fill the table.
-    o.AddPolicy("player-register", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
-    // Email login is public too, and each attempt costs an Argon2 hash, so it gets the
-    // same per-IP limit as admin login. Separate policy so one doesn't use up the other.
-    o.AddPolicy("player-login", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
-    // Device login (login/device). A device token can't be guessed, so this only caps
-    // load; its own policy so a guest's every-launch login doesn't use up email login's.
-    o.AddPolicy("player-device-login", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
-    // The mail routes (verify, resend, forgot, reset). Each one either sends an email or
-    // lets someone guess a code, so they share one per-IP limit, apart from login's.
-    o.AddPolicy("player-mail", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
-});
-
-// dotnet ef database update
-// Running this command migrates the changes to the database - AKA editing the table to match the schemas inside the serialized db
-// But we don't need to do this since we're doing rapid development.
 var app = builder.Build();
 
-// This automatically builds it for you!
+// apply migrations on startup, then make the owner account if there isn't one yet
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<server.Models.Db>();
     db.Database.Migrate();
-    await server.AdminAuth.SeedOwner(db, app.Configuration, app.Logger);
+    await scope.ServiceProvider.GetRequiredService<OwnerSeeder>().Seed();
 }
 
+app.UseApiExceptionHandler();
 app.UseForwardedHeaders();
 app.UseRateLimiter();
 
-// NOTE: do not map "/" to an endpoint. Static-file middleware skips any request
-// that already matched an endpoint, so a route here shadows the Vue UI below.
-app.MapGet("/Health", () => Results.Ok( new { health = "ok" } ));
-// The public player routes (register, link/email, login) are in PlayerAuth.cs.
-// caddy/Caddyfile has a handle block for each; nothing else here is public.
-app.MapPlayerEndpoints();
+app.MapHealthRoutes();
+// public player routes (register, logins, link email, verify, password reset) live in
+// endpoints/playerauth and each one has a handle block in the caddyfile. nothing else is public
+app.MapPlayerAuthRoutes();
 
-// Admin-or-owner only. Players can now log in, but a player session doesn't unlock
-// these yet -- they are the admin's view, not the player API.
-// Lists only which providers each player has linked, never the identities themselves:
-// emails are personal data, and the hardware ID stays out of a casual listing too.
-app.MapGet("/api/players", async (server.Models.Db db) =>
-{
-    var players = await db.Players
-        .OrderBy(p => p.Id)
-        .Select(p => new
-        {
-            id = p.Id,
-            displayName = p.DisplayName,
-            xp = p.Xp,
-            providers = db.PlayerIdentities.Where(i => i.PlayerId == p.Id).Select(i => i.Provider).ToList(),
-        })
-        .ToListAsync();
-    return Results.Ok(players.Select(p => new
-    {
-        p.id,
-        p.displayName,
-        p.xp,
-        providers = p.providers.Select(PlayerAuth.ProviderName).Order().ToList(),
-    }));
-}).RequireAdmin();
-// Admin-created players have no way to sign in: credentials only come from the
-// player routes (register mints a device token, link/email adds an email).
-app.MapPost("/api/players", async (server.Models.Db db, AdminCreatePlayerRequest request) =>
-{
-    if (!PlayerAuth.TryNormalizeDisplayName(request.DisplayName, out var displayName))
-        return Results.BadRequest(new { error = PlayerAuth.DisplayNameRule });
+app.MapPlayerRoutes();
+app.MapCharacterRoutes();
+app.MapTelemetryRoutes();
 
-    var player = new server.Models.Player { Xp = request.Xp, DisplayName = displayName };
-    db.Players.Add(player);
-    await db.SaveChangesAsync();
-    return Results.Ok(new { id = player.Id, displayName = player.DisplayName, xp = player.Xp });
-}).RequireAdmin();
+app.MapAdminRoutes();
 
-app.MapGet("/api/characters", async (server.Models.Db db) => await db.Characters.ToListAsync()).RequireAdmin();
-app.MapPost("/api/characters", async (server.Models.Db db, server.Models.Character c) =>
-{
-    db.Characters.Add(c);
-    await db.SaveChangesAsync();
-    return Results.Ok(c);
-}).RequireAdmin();
+// last on purpose, so any other /api path gets a json 404 instead of the vue page
+app.MapUnknownApiRoutes();
 
-app.MapGet("/api/events", async (server.Models.Db db) => await db.TelemetryEvents.ToListAsync()).RequireAdmin();
-app.MapPost("/api/events", async (server.Models.Db db, server.Models.TelemetryEvent e) =>
-{
-    e.Timestamp = DateTime.UtcNow;
-    db.TelemetryEvents.Add(e);
-    await db.SaveChangesAsync();
-    return Results.Ok(e);
-}).RequireAdmin();
-
-app.MapAdminEndpoints();
-
-// UseDefaultFiles rewrites a request for / to /index.html
+// makes / serve index.html
 app.UseDefaultFiles();
 
-// UseStaticFiles serves anything found in wwwroot
+// serves files out of wwwroot
 app.UseStaticFiles();
 
-// If we go to a broken link, it reroutes us back to index.html
+// anything else is a page in the vue app, so send it index.html and let the ui route it
 app.MapFallbackToFile("index.html");
 
 app.Run();

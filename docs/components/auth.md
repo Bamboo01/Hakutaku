@@ -1,6 +1,6 @@
 # Auth and sessions
 
-Admin auth lives in `server/AdminAuth.cs`. This is the most security-sensitive
+Admin auth lives in `server/Auth/` (hashing, sessions, guards), with its routes in `server/Endpoints/Admin/` and the first-start owner in `server/Hosting/OwnerSeeder.cs`. This is the most security-sensitive
 code in the project and the easiest to break by accident, so this page is
 deliberately detailed. Everything below is about admin accounts, except the
 [player auth](#player-auth) section at the end.
@@ -25,7 +25,7 @@ const int MemoryCostKib = 19456;   // 19 MiB
 const int Lanes = 1;
 const int HashLength = 32;
 
-public static string HashPassword(string password) =>
+public static string Hash(string password) =>   // Auth/PasswordHasher.cs
     Argon2.Hash(password, TimeCost, MemoryCostKib, Lanes, Argon2Type.HybridAddressing, HashLength);
 ```
 
@@ -49,7 +49,7 @@ static bool VerifyPassword(string encodedHash, string password) =>
 ### The timing defence
 
 ```csharp
-static readonly string DummyHash = HashPassword("dummy-password-for-timing");
+public static readonly string DummyHash = Hash("dummy-password-for-timing");
 ```
 
 If the username does not exist, login still runs a full verification — against
@@ -87,7 +87,7 @@ key, not a JWT. Nothing is encoded in it, so nothing can be forged out of it.
 Only the hash is persisted:
 
 ```csharp
-static byte[] HashToken(string token) =>
+public static byte[] Hash(string token) =>   // Auth/TokenHasher.cs
     SHA256.HashData(Encoding.UTF8.GetBytes(token));
 ```
 
@@ -166,18 +166,18 @@ session.IdleExpiresAt = nextIdle < session.ExpiresAt ? nextIdle : session.Expire
     Call `/me` on app load and on route changes. The frontend does exactly that,
     with a comment saying why.
 
-## `FindActiveSession`
+## `AdminSessionService.FindActiveSession`
 
-The function every authenticated request goes through:
+The method every authenticated request goes through. `AdminSessionService` is an injected service (it takes the `Db` and a `TimeProvider`, so tests can fake the clock):
 
 ```csharp
-public static async Task<(AdminSession Session, AdminUser Admin)?> FindActiveSession(Db db, HttpContext http)
+public async Task<(AdminSession Session, AdminUser Admin)?> FindActiveSession(HttpContext http)
 {
     if (!http.Request.Cookies.TryGetValue(CookieName, out var token) || string.IsNullOrEmpty(token))
         return null;
 
-    var tokenHash = HashToken(token);
-    var now = DateTime.UtcNow;
+    var tokenHash = TokenHasher.Hash(token);
+    var now = time.UtcNow();
     var session = await db.AdminSessions.FirstOrDefaultAsync(s =>
         s.TokenHash == tokenHash
         && s.RevokedAt == null
@@ -224,8 +224,8 @@ public static TBuilder RequireAdmin<TBuilder>(this TBuilder builder) where TBuil
 {
     builder.AddEndpointFilter(async (context, next) =>
     {
-        var db = context.HttpContext.RequestServices.GetRequiredService<Db>();
-        var found = await FindActiveSession(db, context.HttpContext);
+        var sessions = context.HttpContext.RequestServices.GetRequiredService<AdminSessionService>();
+        var found = await sessions.FindActiveSession(context.HttpContext);
         if (found is null)
             return Results.Json(new { error = "not logged in" }, statusCode: 401);
         return await next(context);
@@ -234,12 +234,12 @@ public static TBuilder RequireAdmin<TBuilder>(this TBuilder builder) where TBuil
 }
 ```
 
-### `RequireOwner(db, http)` — owner only
+### `RequireOwner(http)` — owner only
 
 Called **inside** a handler, because it needs to distinguish `401` from `403`:
 
 ```csharp
-var (owner, error) = await RequireOwner(db, http);
+var (owner, error) = await sessions.RequireOwner(http);
 if (error is not null) return error;
 ```
 
@@ -249,7 +249,7 @@ in"}` with no session, `403 {"error":"owner only"}` for a non-owner admin.
 | Guard | Lets through | Used by |
 |---|---|---|
 | `.RequireAdmin()` | Owner **or** admin | `/api/players`, `/api/characters`, `/api/events` |
-| `RequireOwner(...)` | Owner only | all of `/api/admin/admins` |
+| `sessions.RequireOwner(...)` | Owner only | all of `/api/admin/admins` |
 
 ## Roles and the owner
 
@@ -258,13 +258,13 @@ public enum AdminRole : short { Owner = 0, Admin = 1 }
 ```
 
 Enforced in the database too, via `ck_admin_users_role` (`role IN (0, 1)`), so a
-third role needs a migration — not just an enum edit. `RoleName()` maps them to
+third role needs a migration — not just an enum edit. `ToName()` (an extension on `AdminRole`) maps them to
 the strings `"owner"` and `"admin"` that the API emits.
 
 ### Seeding
 
 ```csharp
-public static async Task SeedOwner(Db db, IConfiguration config, ILogger logger)
+public async Task Seed()   // Hosting/OwnerSeeder.cs, an injected service (Db, config, logger)
 {
     if (await db.AdminUsers.AnyAsync()) return;
     // ... create username "admin" with Role = Owner
@@ -343,8 +343,6 @@ One-way. No restore endpoint, because nobody needed one.
 - **No audit log.** `admin_sessions` is login history, not an audit trail.
 - **`ip` is recorded, never checked.** No session-pinning to an address.
 - **`totp_secret` is unused.** The column exists; no code reads it.
-- **Deactivation is not atomic.** Sessions are revoked, then the disable is
-  saved — two round trips, no transaction.
 - **Re-deactivating overwrites `disabled_at`**, losing the original time.
 - **No `disabled_by`.** Who deactivated whom is not recorded.
 - **No password change endpoint**, and no minimum on *login* length (creation
@@ -354,8 +352,8 @@ One-way. No restore endpoint, because nobody needed one.
 
 ## Player auth
 
-`server/PlayerAuth.cs`. It reuses the admin helpers (`HashPassword`,
-`VerifyPassword`, `HashToken`, `DummyHash`), so players get the same Argon2id
+The player routes are in `server/Endpoints/PlayerAuth/`, and their helpers in `server/Services/`. They reuse the shared helpers (`PasswordHasher.Hash`, `PasswordHasher.Verify`,
+`PasswordHasher.DummyHash`, `TokenHasher.Hash`), so players get the same Argon2id
 settings and the same hash-only token storage. The differences:
 
 | | Admin | Player |
@@ -363,7 +361,7 @@ settings and the same hash-only token storage. The differences:
 | Token transport | `HttpOnly` cookie | `Authorization: Bearer <token>` header — the callers are game clients, not browsers |
 | Lifetime | 30 min idle + 12 h absolute | one fixed 30 days, no idle timeout |
 | Ways in | username + password | device token (`login/device`) while a guest, then email + password (`login/email`) |
-| Rate limits | `admin-login` | `player-register`, `player-device-login`, `player-login` and `player-mail` (verify, resend, forgot, reset), 5 per minute per IP each |
+| Rate limits | `admin-login` | `player-register`, `player-device-login`, `player-login`, `player-link` and `player-mail` (verify, resend, forgot, reset), 5 per minute per IP each |
 
 How a player gets in:
 
@@ -410,6 +408,13 @@ a `purpose` of verify or reset):
 - **Six digits are weak on their own**, so the guess cap does the real work.
   `RedeemCode` counts the attempt in the database *before* comparing, so parallel
   guesses can't get past the cap, and only one request can redeem a code.
+- **Transactions.** Redeeming a code and the write it unlocks (setting the
+  password and revoking sessions, or marking the email verified and dropping the
+  device token) run in one transaction (`RedeemCodeThen`), so a failure can't burn
+  the code or leave a half-finished change. A **wrong guess commits** instead of
+  rolling back, because the attempt counter has to survive or the cap would stop
+  working. Making a code takes a per-player lock, so parallel requests take turns
+  and can't both pass the one-per-minute check.
 - `link/email` creates the unverified email and mails a code. If the mail fails,
   the link is still saved and the response says `verificationSent: false`.
 - `password/forgot` answers identically for every email, and a hit sends its mail
@@ -419,7 +424,7 @@ a `purpose` of verify or reset):
   player's sessions**.
 - Login does **not** require a verified email. Verification only gates reset.
 
-Mail goes through `IEmailSender` (`server/EmailSender.cs`). With `Smtp:Host` set
+Mail goes through `IEmailSender` (`server/SEmail/`). With `Smtp:Host` set
 (env `SMTP_HOST`, plus `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`) it
 sends over SMTP with TLS. With no host it uses `LogEmailSender`, which **writes
 the whole message, code included, to the app log**. That is right for local dev
@@ -429,7 +434,16 @@ account whose email they can request a reset for.
 Known gaps, on purpose for now:
 
 - **Unverified emails are still claims.** Someone can link an address that isn't
-  theirs and block its owner from linking it. Nothing expires or reclaims these.
+  theirs and hold it before its owner does. Because `link/email` answers the same
+  for a taken email (so it can't be used to look up who has an account), the real
+  owner just gets no code, plus a heads-up email. Nothing expires or reclaims these.
+- **`verify` and `resend` still behave differently after a link that hit a taken
+  email**: they say "no email is linked" where a real pending link says "invalid or
+  expired code". So the lookup leak is closed on `link/email` itself but can still be
+  inferred through those two routes.
+- **Timing is only roughly equal.** A taken email and a free one both pay for the
+  password hash, but a real link also waits on the mail server. Locally (no smtp) the
+  two are within noise; with a real mail server the free path is slower.
 - **A guest's device token never expires**, and there's no way to revoke one
   short of verifying an email. A guest whose token leaks has no recourse until
   they link and verify one.

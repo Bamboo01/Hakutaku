@@ -5,12 +5,18 @@
 ```text
 Hakutaku/
 ├── server/                  ASP.NET Core 10 API (also serves the built UI)
-│   ├── Program.cs           Entry point: DI, middleware, and most endpoints
-│   ├── AdminAuth.cs         Everything auth — hashing, sessions, admin CRUD
+│   ├── Program.cs           Entry point: DI, middleware, and the Map…Routes() calls
+│   ├── Auth/                Password and token hashing, admin sessions, the RequireAdmin/RequireOwner guards
+│   ├── SEmail/              IEmailSender: real SMTP, or log-only when none is set
+│   ├── Endpoints/           One folder per route group: a routes file + one handler per route
+│   ├── Services/            Injected services the player routes share (sessions, identities, codes) plus the pure input rules
+│   ├── Constants/           Policy names, limits, error messages, config keys
+│   ├── Hosting/             Startup pieces: service registration, rate limits, the owner account, the JSON 404 and 500 handlers
 │   ├── Models/
-│   │   ├── data.cs          Player, Character, TelemetryEvent + the DbContext
-│   │   └── Admin.cs         AdminUser, AdminSession, AdminRole
-│   ├── Migrations/          EF Core migration history (5 so far)
+│   │   ├── Db.cs            The DbContext and the table mappings
+│   │   ├── Admin/           AdminUser, AdminSession, AdminRole
+│   │   └── Players/         Player, Character, TelemetryEvent, PlayerIdentity, PlayerSession, ...
+│   ├── Migrations/          EF Core migration history (10 so far)
 │   ├── appsettings.json             Base config
 │   └── appsettings.Development.json Dev connection string (host, not Docker)
 │
@@ -74,21 +80,33 @@ origin and login breaks.
 
 ### No controllers, no repositories, no service layer
 
-Endpoints are lambdas registered directly on the app. A handler takes the
-`DbContext` by injection, does its query, and returns a result:
+Routes are grouped under `server/Endpoints/<Group>/`. Each group has one small
+routes file holding the URL prefix, the auth and rate limits, and one line per
+route. Each route's handler is a static `Handle` method in its own file:
 
 ```csharp
-app.MapGet("/api/players", async (server.Models.Db db) =>
-    await db.Players.ToListAsync()).RequireAdmin();
+// Endpoints/Characters/CharacterRoutes.cs
+var group = app.MapGroup("/api/characters").RequireAdmin();
+group.MapGet("", ListCharacters.Handle);
+group.MapPost("", CreateCharacter.Handle);
+
+// Endpoints/Characters/ListCharacters.cs
+public static async Task<IResult> Handle(Db db) =>
+    Results.Ok(await db.Characters.ToListAsync());
 ```
 
+A handler takes the `DbContext` by injection, does its query, and returns a
+result. `Program.cs` calls each group's `Map…Routes()` explicitly. The groups
+There is no repository interface wrapping EF Core. Logic that touches the db, the
+clock or config lives in small injected services (`Services/`, `Auth/`); pure
+helpers (hashing, input checks) stay static.
 There is no repository interface wrapping EF Core, and no service class in
-between. At this size that indirection would be pure cost. If a handler ever
-grows past a screenful, pull it into a method — that is the whole pattern.
+between. At this size that indirection would be pure cost.
 
-The one exception is auth, which lives in `AdminAuth.cs` as a static class with
-`MapAdminEndpoints()`. It earned its own file because the logic is genuinely
-shared (session lookup, role checks) and genuinely subtle.
+Auth has its own folder, `Auth/`: static password and token hashing, and the injected
+`AdminSessionService` (session lookup, the owner check). It earned its own place because the logic is
+genuinely shared and genuinely subtle. The admin routes themselves are in
+`Endpoints/Admin/`.
 
 ### Auth is an endpoint filter, not an attribute
 
@@ -96,10 +114,10 @@ There is no ASP.NET Identity and no `[Authorize]`. Two primitives do the work:
 
 - `.RequireAdmin()` — a chainable extension method you append to a route, like
   `.RequireRateLimiting(...)`. Lets in any signed-in admin **or** the owner.
-- `RequireOwner(db, http)` — called *inside* a handler when only the owner
+- `sessions.RequireOwner(http)` — called *inside* a handler when only the owner
   should get through, because it needs to return a specific `403`.
 
-Both are in `AdminAuth.cs`. See [Auth and sessions](../components/auth.md).
+`RequireAdmin` is in `Auth/AdminGuards.cs`, `RequireOwner` in `Auth/AdminSessionService.cs`. See [Auth and sessions](../components/auth.md).
 
 ### Migrations run themselves
 

@@ -9,7 +9,7 @@ Roughly in dependency order, across three workstreams: the backend build
 ## 1. Expand the domain model
 
 **Done.** `Player`, `Character` and `TelemetryEvent` exist in
-`server/Models/data.cs` with a migration and `GET`/`POST` endpoints for each.
+`server/Models/Players/` with a migration and `GET`/`POST` endpoints for each.
 
 - [x] `User` / title-account entity — decided not needed: this backend serves a
       single game, so User and Player are 1:1 and `Player` is the account
@@ -27,7 +27,7 @@ Roughly in dependency order, across three workstreams: the backend build
 
 **Done for admins.** Argon2id password hashing, cookie sessions with idle and
 absolute expiry, and owner-gated admin management all live in
-`server/AdminAuth.cs`. `HAKUTAKU_ADMIN_PASSWORD` is read by `SeedOwner` on the
+`server/Auth/`, with the routes in `server/Endpoints/Admin/`. `HAKUTAKU_ADMIN_PASSWORD` is read by `OwnerSeeder` on the
 first start against an empty database.
 
 - [x] Admin entity — `admin_users` and `admin_sessions` (no separate `User`
@@ -36,7 +36,7 @@ first start against an empty database.
       opaque session tokens stored only as SHA-256
 - [x] `/api/players`, `/api/characters` and `/api/events` guarded with
       `.RequireAdmin()`; `/api/admin/admins` restricted to the owner
-- [x] Player auth (`server/PlayerAuth.cs`): `player_identities` (device /
+- [x] Player auth (`server/Endpoints/PlayerAuth/`): `player_identities` (device /
       email, steam reserved) and `player_sessions` tables. `POST
       /api/players/register` makes a guest and returns a server-minted device
       token once (stored only as SHA-256; the request's `hardwareId` is just
@@ -55,14 +55,17 @@ first start against an empty database.
 - [ ] Platform sign-in (Sign in with Apple, Google, Steam) as more identity
       providers; Steam is already reserved in `PlayerProvider`
 - [x] Email verification (6-digit code, 15 min, 5 guesses) and password reset by
-      emailed code, via `IEmailSender` (`server/EmailSender.cs`; SMTP through
+      emailed code, via `IEmailSender` (`server/SEmail/`; SMTP through
       MailKit, or logged to the console when `SMTP_HOST` is unset)
 - [ ] **Configure a real SMTP server before relying on it.** Until `SMTP_*` is
       set in `/var/lib/jenkins/hakutaku.env` on the VM, production only writes
       the codes to the app log, and nobody gets an email. It also needs a sender
       address that mail providers will accept, which a `nip.io` domain is not.
-- [ ] Unverified emails can still be claimed by someone else, blocking the real
-      owner; decide whether they should expire or be reclaimable. Also: no way
+- [ ] Unverified emails can still be claimed by someone else, so the real
+      owner gets no code (link/email answers the same for a taken email, to avoid
+      leaking who has an account); decide whether they should expire or be
+      reclaimable. `verify` and `resend` still give a taken-email caller away.
+      Also: no way
       to change or unlink an email, and old sessions and codes are never deleted
 - [ ] **A player token only unlocks the email routes.** `/api/characters` and
       `/api/events` are still admin-gated, and there is no player logout, no
@@ -307,7 +310,7 @@ service that `simulator/` was once meant for is item 7.
 - [ ] `server/appsettings.Development.json` has the dev password in source
       control. Fine for local-only credentials; move to user-secrets if it ever
       becomes a real one.
-- [ ] `server/Models/data.cs` still says "This is just sample code" — the
-      domain model is real now, so the comment can go.
+- [x] The stale "sample code" comment is gone: models are now one type per file under
+      `server/Models/`, grouped into `Admin/` and `Players/`.
 - [x] Caddyfile formatting warning — fixed when the Caddyfile was rewritten for
       `{$HAKUTAKU_DOMAIN}`; the VM's Caddy logs no longer show it.
