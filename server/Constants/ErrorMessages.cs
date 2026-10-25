@@ -15,6 +15,11 @@ namespace server.Constants
         public const string EmailAlreadyLinked = "this player already has an email linked";
         public const string EmailInUse = "email already in use";
 
+        // For a path under /api that no route matches, and for any unexpected exception.
+        // The 500 message is deliberately vague: details go to the log, never to the client.
+        public const string RouteNotFound = "no such route";
+        public const string ServerError = "something went wrong on the server";
+
         // These quote a limit, so they are built from Limits.
         static readonly string PasswordRange = $"{Limits.MinPasswordLength}-{Limits.MaxPasswordLength} characters";
 

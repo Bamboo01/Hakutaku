@@ -11,6 +11,7 @@ Hakutaku/
 │   ├── Endpoints/           One folder per route group: a routes file + one handler per route
 │   ├── Services/            Helpers the player routes share (sessions, identities, codes)
 │   ├── Constants/           Policy names, limits, error messages, config keys
+│   ├── Hosting/             Startup pieces: the JSON 404 and 500 handlers
 │   ├── Models/
 │   │   ├── Db.cs            The DbContext and the table mappings
 │   │   ├── Admin/           AdminUser, AdminSession, AdminRole

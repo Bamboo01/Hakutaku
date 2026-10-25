@@ -344,8 +344,8 @@ For production, swap in `-p hakutaku -f compose.yaml`.
   `admin_sessions`, and as `player_email_codes`.
 - **`TelemetryEvent.Data` is `text`**, so payloads are neither validated nor
   indexable without casting.
-- **A bad `playerId` returns a bare `500`**, not a clean `4xx` — the foreign-key
-  violation is not caught.
+- **A bad `playerId` returns a generic `500`** (`{ "error": "something went wrong on the
+  server" }`), not a clean `4xx` — the foreign-key violation is not caught.
 - **Npgsql's default pool is 100 connections** and Postgres' default
   `max_connections` is also 100. One app instance is fine; two could exhaust it.
 - **IDs will change.** Game entities use GUIDs; planning documents target

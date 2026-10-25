@@ -445,14 +445,18 @@ curl -b cookies.txt -X POST http://localhost:5008/api/events \
 
 ## Error shapes
 
-Four different shapes, and a client has to handle all of them:
+Three shapes, and a client has to handle all of them:
 
 | Shape | Which responses |
 |---|---|
-| `{ "error": "message" }` | `400`, `401`, `403`, `404`, `409` |
+| `{ "error": "message" }` | `400`, `401`, `403`, `404`, `409`, and `500` (a generic message: details go to the log) |
 | Empty body | `204` (success), and `429` |
-| Bare `500` | A `playerId` that does not exist — an uncaught foreign-key violation |
 | `404` with empty body, `Server: Caddy` | Caddy's default-deny, not the app at all |
+
+A path under `/api` that no route matches returns `404` with `{ "error": "no such route" }`,
+including a known path called with the wrong method. An unexpected server error, such as
+a `playerId` that does not exist (an uncaught foreign-key violation), returns `500` with
+`{ "error": "something went wrong on the server" }`.
 
 `web/src/api.ts` is a working reference for handling these in one place.
 

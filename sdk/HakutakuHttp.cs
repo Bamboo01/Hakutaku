@@ -107,7 +107,7 @@ namespace Hakutaku
         };
 
         // Most errors are { "error": "..." }, but not all: the rate limiter's 429 and
-        // Caddy's 404 have empty bodies, and an unhandled server exception is a bare 500.
+        // Caddy's 404 have empty bodies. An unexpected server error is a JSON 500 with a generic message.
         static string MessageFor(int status, string body)
         {
             try

@@ -138,7 +138,7 @@ The SDK also deals with the responses that aren't `{ error }`:
 
 - the rate limiter's `429` has an empty body;
 - Caddy's `404` for a non-public route has an empty body;
-- a bad id can still produce a bare `500`.
+- a bad id can still produce a `500` (JSON, with a generic message).
 
 These get a sensible default message instead of a JSON parse failure.
 

@@ -8,6 +8,7 @@ using server.Endpoints.Characters;
 using server.Endpoints.PlayerAuth;
 using server.Endpoints.Players;
 using server.Endpoints.Telemetry;
+using server.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -68,6 +69,7 @@ using (var scope = app.Services.CreateScope())
     await server.AdminAuth.SeedOwner(db, app.Configuration, app.Logger);
 }
 
+app.UseApiExceptionHandler();
 app.UseForwardedHeaders();
 app.UseRateLimiter();
 
@@ -84,13 +86,16 @@ app.MapTelemetryRoutes();
 
 app.MapAdminRoutes();
 
+// Last, so any other /api path gets a JSON 404 instead of the Vue page below.
+app.MapUnknownApiRoutes();
+
 // UseDefaultFiles rewrites a request for / to /index.html
 app.UseDefaultFiles();
 
 // UseStaticFiles serves anything found in wwwroot
 app.UseStaticFiles();
 
-// If we go to a broken link, it reroutes us back to index.html
+// Any other path (a page in the Vue app) goes to index.html, so the UI handles its own links.
 app.MapFallbackToFile("index.html");
 
 app.Run();
