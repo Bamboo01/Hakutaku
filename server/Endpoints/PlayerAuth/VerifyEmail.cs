@@ -29,18 +29,25 @@ namespace server.Endpoints.PlayerAuth
                 return Results.Ok(new { verified = true, deviceTokenRemoved = false });
 
             var code = request.Code?.Trim();
-            if (!EmailCodeService.LooksLikeCode(code) || !await codes.RedeemCode(player.Id, EmailCodePurpose.Verify, code!))
+            if (!EmailCodeService.LooksLikeCode(code))
                 return Results.BadRequest(new { error = ErrorMessages.InvalidOrExpiredCode });
 
-            var now = time.UtcNow();
-            await using var transaction = await db.Database.BeginTransactionAsync();
-            await db.PlayerIdentities
-                .Where(i => i.PlayerId == player.Id && i.Provider == PlayerProvider.Email)
-                .ExecuteUpdateAsync(s => s.SetProperty(i => i.VerifiedAt, now));
-            var removed = await db.PlayerIdentities
-                .Where(i => i.PlayerId == player.Id && i.Provider == PlayerProvider.Device)
-                .ExecuteDeleteAsync();
-            await transaction.CommitAsync();
+            // using up the code, marking the email verified and dropping the device token all happen in
+            // one transaction, so a failure can't burn the code or leave the player half switched over
+            var removed = 0;
+            var redeemed = await codes.RedeemCodeThen(player.Id, EmailCodePurpose.Verify, code!, async () =>
+            {
+                var now = time.UtcNow();
+                await db.PlayerIdentities
+                    .Where(i => i.PlayerId == player.Id && i.Provider == PlayerProvider.Email)
+                    .ExecuteUpdateAsync(s => s.SetProperty(i => i.VerifiedAt, now));
+                removed = await db.PlayerIdentities
+                    .Where(i => i.PlayerId == player.Id && i.Provider == PlayerProvider.Device)
+                    .ExecuteDeleteAsync();
+            });
+            if (!redeemed)
+                return Results.BadRequest(new { error = ErrorMessages.InvalidOrExpiredCode });
+
             return Results.Ok(new { verified = true, deviceTokenRemoved = removed > 0 });
         }
     }

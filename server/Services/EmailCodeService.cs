@@ -31,6 +31,13 @@ namespace server.Services
         // if one was already made in the last ResendSeconds
         public async Task<string?> CreateCode(Guid playerId, EmailCodePurpose purpose)
         {
+            // check, retire, insert all happen in one transaction, so a failure part way can't leave
+            // the old code retired with no new one. the lock makes parallel requests for the same
+            // player take turns, otherwise two could both pass the cooldown check and both send a mail
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            var lockKey = $"email-code:{playerId}:{(short)purpose}";
+            await db.Database.ExecuteSqlAsync($"select pg_advisory_xact_lock(hashtextextended({lockKey}, 0))");
+
             var now = time.UtcNow();
             var cooldownStart = now.AddSeconds(-ResendSeconds);
             if (await db.PlayerEmailCodes.AnyAsync(c => c.PlayerId == playerId && c.Purpose == purpose && c.CreatedAt > cooldownStart))
@@ -49,13 +56,28 @@ namespace server.Services
                 ExpiresAt = now.AddMinutes(CodeMinutes),
             });
             await db.SaveChangesAsync();
+            await transaction.CommitAsync();
             return code;
+        }
+
+        // redeems a code and then runs whatever the code is for (set the password, mark the email verified)
+        // in the same transaction. if that follow-up throws, everything rolls back and the code is still
+        // good, instead of being used up for nothing.
+        // careful: a wrong guess has to keep counting against the attempt cap, so that path commits
+        // instead of rolling back. a rollback there would quietly undo the brute-force limit
+        public async Task<bool> RedeemCodeThen(Guid playerId, EmailCodePurpose purpose, string submitted, Func<Task> whenRedeemed)
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            var redeemed = await RedeemCode(playerId, purpose, submitted);
+            if (redeemed) await whenRedeemed();
+            await transaction.CommitAsync();
+            return redeemed;
         }
 
         // checks a submitted code against the player's newest live one and uses it up if it matches.
         // the attempt is counted first, in the db, so parallel guesses can't get past the cap,
-        // and only one request can ever redeem a code
-        public async Task<bool> RedeemCode(Guid playerId, EmailCodePurpose purpose, string submitted)
+        // and only one request can ever redeem a code. private so it's only used through RedeemCodeThen
+        async Task<bool> RedeemCode(Guid playerId, EmailCodePurpose purpose, string submitted)
         {
             var now = time.UtcNow();
             var entry = await db.PlayerEmailCodes

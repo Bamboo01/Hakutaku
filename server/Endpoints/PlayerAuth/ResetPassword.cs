@@ -25,17 +25,26 @@ namespace server.Endpoints.PlayerAuth
 
             var identity = await db.PlayerIdentities.FirstOrDefaultAsync(i =>
                 i.Provider == PlayerProvider.Email && i.Subject == email && i.VerifiedAt != null);
-            if (identity is null || !EmailCodeService.LooksLikeCode(code) || !await codes.RedeemCode(identity.PlayerId, EmailCodePurpose.Reset, code!))
+            if (identity is null || !EmailCodeService.LooksLikeCode(code))
                 return Results.BadRequest(new { error = ErrorMessages.InvalidOrExpiredCode });
 
-            var hash = PasswordHasher.Hash(request.NewPassword);
-            var now = time.UtcNow();
-            await db.PlayerIdentities
-                .Where(i => i.PlayerId == identity.PlayerId && i.Provider == PlayerProvider.Email)
-                .ExecuteUpdateAsync(s => s.SetProperty(i => i.PwHash, hash));
-            await db.PlayerSessions
-                .Where(s => s.PlayerId == identity.PlayerId && s.RevokedAt == null)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now));
+            // using up the code, the new password and the session revoke all happen in one transaction,
+            // so it can't end half done (code burned but password unchanged, or password changed but
+            // the old sessions still alive)
+            var redeemed = await codes.RedeemCodeThen(identity.PlayerId, EmailCodePurpose.Reset, code!, async () =>
+            {
+                var hash = PasswordHasher.Hash(request.NewPassword);
+                var now = time.UtcNow();
+                await db.PlayerIdentities
+                    .Where(i => i.PlayerId == identity.PlayerId && i.Provider == PlayerProvider.Email)
+                    .ExecuteUpdateAsync(s => s.SetProperty(i => i.PwHash, hash));
+                await db.PlayerSessions
+                    .Where(s => s.PlayerId == identity.PlayerId && s.RevokedAt == null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now));
+            });
+            if (!redeemed)
+                return Results.BadRequest(new { error = ErrorMessages.InvalidOrExpiredCode });
+
             return Results.Ok(new { ok = true });
         }
     }

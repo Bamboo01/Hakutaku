@@ -193,8 +193,6 @@ Deliberately listed rather than quietly omitted:
 - `admin_users.totp_secret` exists in the schema and is unused by any code.
 - Deactivation records no `disabled_by`, and re-deactivating overwrites
   `disabled_at`.
-- Deactivation's two writes are not in one transaction: sessions are revoked,
-  then the disable is saved.
 - Migrations run on startup, so several app instances against one database would
   race.
 - No test suite anywhere, so CI has no test stage.

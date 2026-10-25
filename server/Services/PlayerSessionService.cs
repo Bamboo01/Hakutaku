@@ -18,6 +18,15 @@ namespace server.Services
         // or login makes a fresh session instead of reusing one
         public async Task<(string Token, DateTime ExpiresAt)> IssueSession(Guid playerId)
         {
+            var session = AddSession(playerId);
+            await db.SaveChangesAsync();
+            return session;
+        }
+
+        // adds the session to the db context but doesn't save it, so a caller can save it in one go
+        // with other changes (register saves the new player and their first session together)
+        public (string Token, DateTime ExpiresAt) AddSession(Guid playerId)
+        {
             var token = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
             var expiresAt = time.UtcNow().AddDays(SessionDays);
             db.PlayerSessions.Add(new PlayerSession
@@ -26,7 +35,6 @@ namespace server.Services
                 TokenHash = TokenHasher.Hash(token),
                 ExpiresAt = expiresAt,
             });
-            await db.SaveChangesAsync();
             return (token, expiresAt);
         }
 

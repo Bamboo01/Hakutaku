@@ -33,9 +33,11 @@ namespace server.Endpoints.PlayerAuth
                 Provider = PlayerProvider.Device,
                 Subject = PlayerIdentityService.HashDeviceToken(deviceToken),
             });
-            await db.SaveChangesAsync();
 
-            var (token, expiresAt) = await sessions.IssueSession(player.Id);
+            // player, device identity and first session go in one save (one transaction), so a failure
+            // can't leave a guest behind whose device token was never handed out
+            var (token, expiresAt) = sessions.AddSession(player.Id);
+            await db.SaveChangesAsync();
             return Results.Ok(new { id = player.Id, displayName = player.DisplayName, xp = player.Xp, deviceToken, token, expiresAt });
         }
     }

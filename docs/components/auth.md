@@ -343,8 +343,6 @@ One-way. No restore endpoint, because nobody needed one.
 - **No audit log.** `admin_sessions` is login history, not an audit trail.
 - **`ip` is recorded, never checked.** No session-pinning to an address.
 - **`totp_secret` is unused.** The column exists; no code reads it.
-- **Deactivation is not atomic.** Sessions are revoked, then the disable is
-  saved — two round trips, no transaction.
 - **Re-deactivating overwrites `disabled_at`**, losing the original time.
 - **No `disabled_by`.** Who deactivated whom is not recorded.
 - **No password change endpoint**, and no minimum on *login* length (creation
@@ -410,6 +408,13 @@ a `purpose` of verify or reset):
 - **Six digits are weak on their own**, so the guess cap does the real work.
   `RedeemCode` counts the attempt in the database *before* comparing, so parallel
   guesses can't get past the cap, and only one request can redeem a code.
+- **Transactions.** Redeeming a code and the write it unlocks (setting the
+  password and revoking sessions, or marking the email verified and dropping the
+  device token) run in one transaction (`RedeemCodeThen`), so a failure can't burn
+  the code or leave a half-finished change. A **wrong guess commits** instead of
+  rolling back, because the attempt counter has to survive or the cap would stop
+  working. Making a code takes a per-player lock, so parallel requests take turns
+  and can't both pass the one-per-minute check.
 - `link/email` creates the unverified email and mails a code. If the mail fails,
   the link is still saved and the response says `verificationSent: false`.
 - `password/forgot` answers identically for every email, and a hit sends its mail

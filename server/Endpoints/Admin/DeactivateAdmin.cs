@@ -20,12 +20,16 @@ namespace server.Endpoints.Admin
             if (target.Role == AdminRole.Owner)
                 return Results.Json(new { error = "the owner account can't be deactivated" }, statusCode: StatusCodes.Status403Forbidden);
 
+            // disabling the admin and revoking their sessions go together, so a failure can't leave
+            // the sessions dead but the account still able to log back in
             var now = time.UtcNow();
+            await using var transaction = await db.Database.BeginTransactionAsync();
             target.DisabledAt = now;
             await db.AdminSessions
                 .Where(s => s.AdminId == target.Id && s.RevokedAt == null)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now));
             await db.SaveChangesAsync();
+            await transaction.CommitAsync();
 
             return Results.NoContent();
         }
