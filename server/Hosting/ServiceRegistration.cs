@@ -29,9 +29,11 @@ namespace server.Hosting
             services.AddScoped<EmailCodeService>();
             services.AddScoped<OwnerSeeder>();
 
-            // remembers which emails already got a "someone tried to use your email" heads-up
+            // remembers which emails already got a "someone tried to use your email" heads-up, and how
+            // often each player changed their display name
             services.AddMemoryCache();
             services.AddSingleton<LinkAttemptNotifier>();
+            services.AddSingleton<DisplayNameLimiter>();
 
             return services;
         }

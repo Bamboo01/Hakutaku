@@ -59,6 +59,7 @@ namespace simulator
             Expect.Unauthorized => "401",
             Expect.Forbidden => "403",
             Expect.Conflict => "409",
+            Expect.TooManyRequests => "429",
             Expect.Denied => notFoundIsDenied ? "denied (401, 403 or 404)" : "denied (401 or 403)",
             _ => expect.ToString(),
         };
@@ -70,6 +71,7 @@ namespace simulator
             Expect.Unauthorized => error?.HttpCode == 401,
             Expect.Forbidden => error?.HttpCode == 403,
             Expect.Conflict => error?.HttpCode == 409,
+            Expect.TooManyRequests => error?.HttpCode == 429,
             Expect.Denied => error?.HttpCode is 401 or 403 || (notFoundIsDenied && error?.HttpCode == 404),
             _ => false,
         };

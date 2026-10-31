@@ -47,7 +47,7 @@ See [Auth and sessions](../components/auth.md) for the mechanics.
 | DELETE | `/api/admin/admins/{id}` | **Owner** | Deactivate an admin |
 | POST | `/api/players/register` | Rate-limited, **public** | Make a guest player; returns its device token (once) and a session |
 | POST | `/api/players/login/device` | Rate-limited, **public** | Sign in with a device token; never creates a player |
-| POST | `/api/players/display-name` | Player token, **public** | Set the current player's display name |
+| POST | `/api/players/display-name` | Player token, **public**, limited per player | Set the current player's display name |
 | POST | `/api/players/link/email` | Player token, **public** | Add an email + password to the current player |
 | POST | `/api/players/login/email` | Rate-limited, **public** | Sign in with email + password, returns a session token |
 | POST | `/api/players/email/verify` | Player token, rate-limited | Confirm the emailed 6-digit code |
@@ -286,13 +286,16 @@ The rules are the same everywhere a display name is accepted:
 - **not unique**: two players can both be "Bob". It's a label, so never use it
   to identify a player. Use the player id for that.
 
-Not rate-limited: it needs a session, and it is a single `UPDATE`.
+Limited **per player**, not per IP: 5 tries an hour, so players behind one shared
+IP don't use up each other's. Every try with a valid token counts, refused names
+included. The count is kept in memory, so a server restart resets it.
 
 | Status | When |
 |---|---|
 | `200` | The name as stored |
 | `400` | Missing, or breaks the rules above |
 | `401` | No token, or an unknown, expired or revoked one |
+| `429` | This player already made 5 tries in the last hour (unlike the per-IP limits, this one has a body: `{"error": "..."}`) |
 
 ### Link an email
 

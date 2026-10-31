@@ -36,6 +36,9 @@ namespace server.Constants
         public static readonly string DisplayNameRule =
             $"displayName must be {Limits.DisplayNameMinLength}-{Limits.DisplayNameMaxLength} characters, with no control characters";
 
+        public static readonly string DisplayNameRateLimited =
+            $"display name can only be changed {RateLimits.DisplayNameChanges} times an hour, try again later";
+
         public static readonly string HardwareIdRequired =
             $"hardwareId is required (1-{Limits.MaxIdentifierLength} characters); register no longer takes a deviceId";
 

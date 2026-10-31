@@ -25,6 +25,7 @@ namespace simulator
         Unauthorized,
         Forbidden,
         Conflict,
+        TooManyRequests,
         // 401 or 403, which is what the admin gate answers locally or through the tunnel.
         // Against any other host 404 counts too, since that's Caddy's answer on the public
         // domain for a route that isn't public (see Report).
@@ -128,7 +129,8 @@ namespace simulator
             var oldClient = await RetryIfLimited(() => stranger.SendRawRequestAsync("POST", "/api/players/register", """{"deviceId":"old-client-device-id"}"""));
             report.Check("stranger", "raw POST /api/players/register (old deviceId body)", Expect.BadRequest, oldClient.Error);
 
-            // Stored trimmed. Not rate limited, so these cost nothing against the limits.
+            // Stored trimmed. display-name is limited per player (see below), not per IP, so these
+            // cost nothing against the per-IP limits.
             const string newName = "Sir Simulator";
             var rename = await c.UpdateUserTitleDisplayNameAsync(new UpdateUserTitleDisplayNameRequest { DisplayName = $"  {newName}  " });
             report.Check(player.Name, "UpdateUserTitleDisplayName", Expect.Ok, rename.Error, rename.Result?.DisplayName);
@@ -150,6 +152,14 @@ namespace simulator
                 var refused = await c.UpdateUserTitleDisplayNameAsync(new UpdateUserTitleDisplayNameRequest { DisplayName = bad });
                 report.Check(player.Name, $"UpdateUserTitleDisplayName ({label})", Expect.BadRequest, refused.Error);
             }
+
+            // Limited per player: 5 tries an hour, and every try with a valid token counts, refused names
+            // included. The rename and the three refused names used four, so the 5th goes through and the
+            // 6th is turned away.
+            var fifth = await c.UpdateUserTitleDisplayNameAsync(new UpdateUserTitleDisplayNameRequest { DisplayName = newName });
+            report.Check(player.Name, "UpdateUserTitleDisplayName (5th this hour)", Expect.Ok, fifth.Error);
+            var sixth = await c.UpdateUserTitleDisplayNameAsync(new UpdateUserTitleDisplayNameRequest { DisplayName = newName });
+            report.Check(player.Name, "UpdateUserTitleDisplayName (6th this hour)", Expect.TooManyRequests, sixth.Error);
 
             player.Email = MockPlayer.NewEmail();
             player.Password = MockPlayer.NewPassword();

@@ -36,6 +36,11 @@ namespace server.Constants
         // link email hashes a password and can send mail, and a session is free to get, so it is limited too
         public const string PlayerLink = "player-link";
 
+        // display name changes are limited per player instead of per ip: DisplayNameLimiter counts them
+        // once the token is checked, so players on one shared ip don't use up each other's changes
+        public const int DisplayNameChanges = 5;
+        public static readonly TimeSpan DisplayNameWindow = TimeSpan.FromHours(1);
+
         // every policy allows this many requests per client ip in each window
         public const int PermitLimit = 5;
         public static readonly TimeSpan Window = TimeSpan.FromMinutes(1);

@@ -44,9 +44,10 @@ dotnet run -- probe --url http://localhost:8090   # full Docker stack, or prod o
 | Rename player 1 (with padding spaces) | `200`, stored trimmed |
 | Player 2 takes player 1's name | `200`, since names aren't unique |
 | Names too short, too long, or with a control character | `400` each |
+| Player 1's 5th and 6th name tries in the hour | `200`, then `429` (the limit is per player) |
 | Link an email to player 1 | `200`, unverified |
 | Link a second email to player 1 | `409` |
-| Player 2 links player 1's email | `409` |
+| Player 2 links player 1's email | `200`, the same answer as a free email, so it can't be used to look up accounts |
 | Player 1's device token, with the email linked but not verified | `200`: it's only removed at verification |
 | Verify with a wrong code | `400` |
 | Email login | `200`, the same player id as the device, with the new name |

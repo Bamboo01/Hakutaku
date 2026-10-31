@@ -361,7 +361,7 @@ settings and the same hash-only token storage. The differences:
 | Token transport | `HttpOnly` cookie | `Authorization: Bearer <token>` header — the callers are game clients, not browsers |
 | Lifetime | 30 min idle + 12 h absolute | one fixed 30 days, no idle timeout |
 | Ways in | username + password | device token (`login/device`) while a guest, then email + password (`login/email`) |
-| Rate limits | `admin-login` | `player-register`, `player-device-login`, `player-login`, `player-link` and `player-mail` (verify, resend, forgot, reset), 5 per minute per IP each |
+| Rate limits | `admin-login` | `player-register`, `player-device-login`, `player-login`, `player-link` and `player-mail` (verify, resend, forgot, reset), 5 per minute per IP each. `display-name` is limited per player instead: 5 tries an hour, counted in memory |
 
 How a player gets in:
 
