@@ -89,7 +89,7 @@ namespace server.Endpoints.PlayerAuth
             var sent = false;
             try
             {
-                var code = await codes.CreateCode(player.Id, EmailCodePurpose.Verify);
+                var (code, _) = await codes.CreateCode(player.Id, EmailCodePurpose.Verify);
                 if (code is not null)
                 {
                     await EmailCodeService.SendCodeMail(mail, email, EmailCodePurpose.Verify, code);

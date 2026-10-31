@@ -370,7 +370,7 @@ the player signs in with `login/email`.
 |---|---|
 | `200` | A new code was mailed |
 | `409` | Already verified |
-| `429` | A code was sent in the last 60 seconds, or over the per-IP limit |
+| `429` | A code was sent in the last 60 seconds, the player already had 5 verification codes in the last 24 hours (the message says which), or over the per-IP limit |
 | `503` | The mail server refused or failed |
 
 ### Forgot and reset a password
@@ -388,7 +388,9 @@ curl -X POST http://localhost:5008/api/players/password/reset \
 
 `forgot` answers `200` **whether or not** that email has an account, so it can't
 be used to find out who does. A code is only mailed for a *verified* email, at
-most once a minute per player. The code works like a verification code.
+most once a minute and 5 a day per player. Past either limit it still answers
+`200` and just sends nothing, so that can't give an account away either. The
+code works like a verification code.
 
 `reset` sets the new password (8–256 characters) and **revokes every session**
 the player has. It does not log them in; they sign in again with `login/email`.

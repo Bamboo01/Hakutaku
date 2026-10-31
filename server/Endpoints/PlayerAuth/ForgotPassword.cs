@@ -36,7 +36,9 @@ namespace server.Endpoints.PlayerAuth
                 i.Provider == PlayerProvider.Email && i.Subject == email && i.VerifiedAt != null);
             if (identity is not null)
             {
-                var code = await codes.CreateCode(identity.PlayerId, EmailCodePurpose.Reset);
+                // a refusal (too soon, or today's codes used up) stays silent, so the answer is the same
+                // as for an email with no account
+                var (code, _) = await codes.CreateCode(identity.PlayerId, EmailCodePurpose.Reset);
                 if (code is not null)
                 {
                     // sent in the background so a hit isn't noticeably slower than a miss

@@ -41,6 +41,10 @@ namespace server.Constants
         public const int DisplayNameChanges = 5;
         public static readonly TimeSpan DisplayNameWindow = TimeSpan.FromHours(1);
 
+        // codes mailed to one account (per purpose) in 24 hours, on top of the one-a-minute gap. without
+        // it, forgot password could be used to flood someone's inbox, one mail a minute, all day
+        public const int CodesPerDay = 5;
+
         // every policy allows this many requests per client ip in each window
         public const int PermitLimit = 5;
         public static readonly TimeSpan Window = TimeSpan.FromMinutes(1);

@@ -403,7 +403,10 @@ a `purpose` of verify or reset):
 
 - A code is **6 digits**, lives **15 minutes**, works **once**, and dies after
   **5 wrong guesses**. A new code retires the older one, and a player can only be
-  mailed one per purpose per minute.
+  mailed one per purpose per minute and **5 per purpose per 24 hours**. The daily
+  count comes from the `player_email_codes` rows themselves, since old codes are
+  marked used and never deleted. `forgot` stays silent past either limit (so it
+  can't give an account away), and `resend` says which limit it hit.
 - Only a SHA-256 of the code (tied to the player and purpose) is stored.
 - **Six digits are weak on their own**, so the guess cap does the real work.
   `RedeemCode` counts the attempt in the database *before* comparing, so parallel

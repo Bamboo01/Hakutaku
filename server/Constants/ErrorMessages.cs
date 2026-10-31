@@ -39,6 +39,9 @@ namespace server.Constants
         public static readonly string DisplayNameRateLimited =
             $"display name can only be changed {RateLimits.DisplayNameChanges} times an hour, try again later";
 
+        public static readonly string TooManyCodesToday =
+            $"too many codes today (up to {RateLimits.CodesPerDay} a day), try again tomorrow";
+
         public static readonly string HardwareIdRequired =
             $"hardwareId is required (1-{Limits.MaxIdentifierLength} characters); register no longer takes a deviceId";
 
