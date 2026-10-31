@@ -38,7 +38,7 @@ namespace server.Endpoints.PlayerAuth
                 return Results.BadRequest(new { error = ErrorMessages.ResetPasswordInvalid });
 
             var identity = await db.PlayerIdentities.FirstOrDefaultAsync(i =>
-                i.Provider == PlayerProvider.Email && i.Subject == email && i.VerifiedAt != null);
+                i.Provider == PlayerProvider.Email && i.Subject == PlayerInputRules.EmailKey(email) && i.VerifiedAt != null);
             if (identity is null || !EmailCodeService.LooksLikeCode(code))
                 return Results.BadRequest(new { error = ErrorMessages.InvalidOrExpiredCode });
 

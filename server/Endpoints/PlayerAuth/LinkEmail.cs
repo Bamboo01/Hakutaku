@@ -50,14 +50,16 @@ namespace server.Endpoints.PlayerAuth
             // hashed before we know whether the email is taken, so a taken email costs the same as a free one
             var pwHash = PasswordHasher.Hash(request.Password);
 
-            var takenByAnother = await db.PlayerIdentities.AnyAsync(i => i.Provider == PlayerProvider.Email && i.Subject == email);
+            // taken is judged by the key, so a gmail alias of a taken address counts as taken too
+            var key = PlayerInputRules.EmailKey(email);
+            var takenByAnother = await db.PlayerIdentities.AnyAsync(i => i.Provider == PlayerProvider.Email && i.Subject == key);
             if (!takenByAnother)
             {
                 db.PlayerIdentities.Add(new PlayerIdentity
                 {
                     PlayerId = player.Id,
                     Provider = PlayerProvider.Email,
-                    Subject = email,
+                    Subject = key,
                     Email = email,
                     PwHash = pwHash,
                 });
@@ -80,7 +82,8 @@ namespace server.Endpoints.PlayerAuth
             {
                 // same answer as a real link, so this route can't be used to find out which emails have
                 // accounts. no code is made for the caller, and the real owner gets a heads-up instead
-                notifier.NotifyOwner(email);
+                // the key, not what was typed, so trying lots of aliases can't dodge the once-an-hour limit
+                notifier.NotifyOwner(key);
                 return Results.Ok(new { provider = PlayerIdentityService.ProviderName(PlayerProvider.Email), email, verified = false, verificationSent = true });
             }
 

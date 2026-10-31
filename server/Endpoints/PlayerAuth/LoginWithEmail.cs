@@ -32,7 +32,7 @@ namespace server.Endpoints.PlayerAuth
 
             var identity = await db.PlayerIdentities
                 .Include(i => i.Player)
-                .FirstOrDefaultAsync(i => i.Provider == PlayerProvider.Email && i.Subject == email);
+                .FirstOrDefaultAsync(i => i.Provider == PlayerProvider.Email && i.Subject == PlayerInputRules.EmailKey(email));
 
             // unknown email still checks a dummy hash, so a miss takes as long as a wrong password and
             // never says which emails exist (same rule as admin login)

@@ -33,7 +33,7 @@ namespace server.Endpoints.PlayerAuth
                 return Results.BadRequest(new { error = "a valid email is required" });
 
             var identity = await db.PlayerIdentities.FirstOrDefaultAsync(i =>
-                i.Provider == PlayerProvider.Email && i.Subject == email && i.VerifiedAt != null);
+                i.Provider == PlayerProvider.Email && i.Subject == PlayerInputRules.EmailKey(email) && i.VerifiedAt != null);
             if (identity is not null)
             {
                 // a refusal (too soon, or today's codes used up) stays silent, so the answer is the same
@@ -45,7 +45,7 @@ namespace server.Endpoints.PlayerAuth
                     var log = logs.CreateLogger(LogCategories.PlayerAuth);
                     _ = Task.Run(async () =>
                     {
-                        try { await EmailCodeService.SendCodeMail(mail, email, EmailCodePurpose.Reset, code); }
+                        try { await EmailCodeService.SendCodeMail(mail, identity.Email!, EmailCodePurpose.Reset, code); }
                         catch (Exception e) { log.LogError(e, "Could not send the password reset email"); }
                     });
                 }

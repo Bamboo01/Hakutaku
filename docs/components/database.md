@@ -142,7 +142,7 @@ is one way to prove who they are.
 | `provider` | Meaning | `subject` |
 |---|---|---|
 | `0` device | A guest's device token, minted by `register` | SHA-256 of the token, lowercase hex |
-| `1` email | Email + password | the lowercased email |
+| `1` email | Email + password | the email's key: lowercased, and for Gmail with dots and `+tag` removed |
 | `2` steam | Reserved, nothing creates it yet | — |
 
 - **`(provider, subject)` is the primary key.** One device token or email can
@@ -155,8 +155,18 @@ is one way to prove who they are.
 - Postgres also enforces **at most one email identity per player** (the partial
   unique index `ux_player_identities_one_email`) and the provider range
   (`ck_player_identities_provider`).
-- **`email`** repeats the address on email identities, kept apart from `subject`
-  because it is PII. **`pw_hash`** is the Argon2id encoded string, email only.
+- **Gmail aliases are one identity.** `subject` holds a key, not the typed
+  address. Gmail ignores dots and anything after a `+`, and `googlemail.com` is the
+  same inbox, so `Sher.Wyn+x@googlemail.com` and `sherwyn@gmail.com` both get the
+  key `sherwyn@gmail.com` and can't be two accounts. Other providers keep dots and
+  `+` as typed. The rule is `PlayerInputRules.EmailKey`. The
+  `CanonicalizeGmailSubjects` migration rewrote existing Gmail rows to the key; if
+  two existing rows would have folded to the same key, only the oldest was
+  rewritten and the other keeps its old subject, so email login can no longer
+  reach it. Its `Down()` puts `subject` back from `email`.
+- **`email`** is the address as typed (lowercased) on email identities, and is where
+  mail is sent. It is kept apart from `subject` because the two differ for Gmail,
+  and because it is PII. **`pw_hash`** is the Argon2id encoded string, email only.
 - Linking an email **adds** a row, and the device identity stays until the email
   is verified. **Verifying deletes the device identity** (same transaction), so a
   player with a verified email never has one.

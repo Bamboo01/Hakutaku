@@ -311,6 +311,13 @@ Adds an email + password to the player the token belongs to. The device token
 strand a guest. The email is trimmed and lowercased. The password must be 8–256
 characters.
 
+**Gmail aliases count as one address.** Gmail ignores dots and anything after a
+`+`, and `googlemail.com` is the same inbox as `gmail.com`, so
+`sher.wyn+game@googlemail.com` and `sherwyn@gmail.com` are the same email: the
+second one to link it gets the same answer as for any taken email. Login, forgot
+and reset find the account through any of those spellings, and mail still goes to
+the address as it was typed. Other providers keep dots and `+` as typed.
+
 The email starts **unverified**, and a 6-digit code is mailed to it
 (`verificationSent` says whether that worked; if not, use `email/resend`). The
 link itself is saved either way, and login works before verifying. Only a
