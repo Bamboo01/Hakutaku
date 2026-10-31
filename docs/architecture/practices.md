@@ -121,6 +121,7 @@ security change and should be discussed first.
 | Login answers one identical `401` for wrong password, unknown user and disabled account | Does not leak which usernames exist |
 | An unknown username still runs a hash verification against a dummy | A miss costs the same time as a wrong password, so timing does not leak either |
 | Two expiries: 30 min idle, 12 h absolute | A forgotten tab dies; a stolen cookie cannot be kept alive forever |
+| The app container runs as the non-root `app` user, not root | If the app were ever exploited, the attacker would not have root inside the container |
 
 Full detail in [Auth and sessions](../components/auth.md).
 

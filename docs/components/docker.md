@@ -27,6 +27,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=api /out .
 COPY --from=web /web/dist ./wwwroot
+# run as the non-root "app" user that the base image already has, instead of root. 8080 is above 1024 so
+# it doesn't need root to listen
+USER $APP_UID
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Hakutaku.Server.dll"]
 ```
@@ -42,6 +45,16 @@ Stage 3 is also where **the UI and API become one process**: the Vue build
 output lands in `wwwroot`, which ASP.NET serves as static files. That is the
 single-origin setup the session cookie depends on — see
 [Communication](../architecture/communication.md).
+
+### Why the app doesn't run as root
+
+Containers run as `root` unless told otherwise. If something in the app were
+ever exploited, the attacker would then have root inside the container, which
+makes escaping it easier. The ASP.NET base image ships a low-permission `app`
+user (its id is in `$APP_UID`), so stage 3 switches to it with `USER`. Port 8080
+is above 1024, so listening on it needs no extra rights, and in testing nothing
+needed write access to disk, so nothing else had to change. You can check it with
+`docker run --rm --entrypoint id <image>`, which should print `uid=1654(app)`.
 
 ### Why `package*.json` is copied before the rest
 
