@@ -42,6 +42,9 @@ namespace server.Constants
         public static readonly string TooManyCodesToday =
             $"too many codes today (up to {RateLimits.CodesPerDay} a day), try again tomorrow";
 
+        public static readonly string CreateServerKeyInvalid =
+            $"name is required ({Limits.ServerKeyNameMaxLength} characters at most, no control characters) and expiresAt, if given, must be in the future";
+
         public static readonly string HardwareIdRequired =
             $"hardwareId is required (1-{Limits.MaxIdentifierLength} characters); register no longer takes a deviceId";
 

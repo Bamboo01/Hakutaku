@@ -6,7 +6,7 @@
 Hakutaku/
 ├── server/                  ASP.NET Core 10 API (also serves the built UI)
 │   ├── Program.cs           Entry point: DI, middleware, and the Map…Routes() calls
-│   ├── Auth/                Password and token hashing, admin sessions, the RequireAdmin/RequireOwner guards
+│   ├── Auth/                Password and token hashing, admin sessions, the RequireAdmin/RequireOwner guards, the RequireServerKey filter
 │   ├── SEmail/              IEmailSender: real SMTP, or log-only when none is set
 │   ├── Endpoints/           One folder per route group: a routes file + one handler per route
 │   ├── Services/            Injected services the player routes share (sessions, identities, codes) plus the pure input rules
@@ -14,9 +14,9 @@ Hakutaku/
 │   ├── Hosting/             Startup pieces: service registration, rate limits, the owner account, the JSON 404 and 500 handlers
 │   ├── Models/
 │   │   ├── Db.cs            The DbContext and the table mappings
-│   │   ├── Admin/           AdminUser, AdminSession, AdminRole
+│   │   ├── Admin/           AdminUser, AdminSession, AdminRole, ServerKey
 │   │   └── Players/         Player, Character, TelemetryEvent, PlayerIdentity, PlayerSession, ...
-│   ├── Migrations/          EF Core migration history (10 so far)
+│   ├── Migrations/          EF Core migration history (12 so far)
 │   ├── appsettings.json             Base config
 │   └── appsettings.Development.json Dev connection string (host, not Docker)
 │

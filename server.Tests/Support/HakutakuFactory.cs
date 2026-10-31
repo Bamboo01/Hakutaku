@@ -29,6 +29,9 @@ namespace server.Tests.Support
         // the local dev database from compose.dev.yaml. point HAKUTAKU_TEST_PG at another server to use that instead
         const string DefaultServer = "Host=localhost;Port=5432;Username=hakutaku;Password=hakutaku";
 
+        // the owner account is made on first start with this password, the username is always "admin"
+        public const string OwnerPassword = "test-owner-password-1";
+
         readonly string serverConnection = Environment.GetEnvironmentVariable("HAKUTAKU_TEST_PG") ?? DefaultServer;
         readonly string dbName = "hk_test_" + Guid.NewGuid().ToString("N");
 
@@ -57,7 +60,7 @@ namespace server.Tests.Support
         {
             builder.UseContentRoot(ServerDirectory());
             builder.UseSetting("ConnectionStrings:Db", ConnectionString);
-            builder.UseSetting("HAKUTAKU_ADMIN_PASSWORD", "test-owner-password-1");
+            builder.UseSetting("HAKUTAKU_ADMIN_PASSWORD", OwnerPassword);
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IEmailSender>();

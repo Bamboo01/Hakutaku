@@ -181,5 +181,7 @@ open question is whether it POSTs to `/api/events` (one source of truth for
 validation) or writes straight to Postgres (faster, duplicates the validation).
 
 Either way it needs something `.RequireAdmin()` cannot give it: a game server
-has no business holding an admin session cookie. That means a server-key path
-before the C++ work can land. See [Telemetry ingestion](../components/ingestion.md).
+has no business holding an admin session cookie. The server-key path now exists
+(`X-Server-Key`, guarding `/api/server/*`, see
+[Auth and sessions](../components/auth.md#server-keys)), but nothing under it
+accepts events yet. See [Telemetry ingestion](../components/ingestion.md).

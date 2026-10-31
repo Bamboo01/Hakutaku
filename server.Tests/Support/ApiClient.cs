@@ -39,15 +39,34 @@ namespace server.Tests.Support
             return $"10.{(n >> 16) & 255}.{(n >> 8) & 255}.{n & 255}";
         }
 
-        // pass an ip to send a call from that address on purpose, e.g. to share a rate limit
-        public async Task<Reply> Post(string path, object? body = null, string? token = null, string? ip = null)
+        // pass an ip to send a call from that address on purpose, e.g. to share a rate limit. a server key goes
+        // in the X-Server-Key header. an admin's cookie is kept by the client itself after LoginAdmin
+        public async Task<Reply> Send(HttpMethod method, string path, object? body = null, string? token = null, string? ip = null, string? serverKey = null)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, path);
+            using var request = new HttpRequestMessage(method, path);
             request.Headers.Add("X-Forwarded-For", ip ?? NextIp());
             if (token is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            request.Content = JsonContent.Create(body ?? new { });
+            if (serverKey is not null) request.Headers.Add("X-Server-Key", serverKey);
+            if (body is not null) request.Content = JsonContent.Create(body);
             using var response = await http.SendAsync(request);
             return new Reply(response.StatusCode, await response.Content.ReadAsStringAsync());
+        }
+
+        // a post always sends a body, an empty one if there is none, like the game client does
+        public Task<Reply> Post(string path, object? body = null, string? token = null, string? ip = null, string? serverKey = null) =>
+            Send(HttpMethod.Post, path, body ?? new { }, token, ip, serverKey);
+
+        public Task<Reply> Get(string path, string? token = null, string? serverKey = null) =>
+            Send(HttpMethod.Get, path, token: token, serverKey: serverKey);
+
+        public Task<Reply> Delete(string path, string? serverKey = null) =>
+            Send(HttpMethod.Delete, path, serverKey: serverKey);
+
+        // signs in as an admin. the session cookie then stays on this client, so make one client per person
+        public async Task LoginAdmin(string username, string password)
+        {
+            var reply = await Post("/api/admin/login", new { username, password });
+            Assert.Equal(HttpStatusCode.NoContent, reply.Status);
         }
 
         public async Task<Guest> RegisterGuest(string? ip = null)

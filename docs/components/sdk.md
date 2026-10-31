@@ -199,7 +199,7 @@ line.** If you forget, the build warns on the file's first `?`.
 
 | Question | Notes |
 |---|---|
-| **Game servers** | This is a *client* SDK and only knows player tokens. A server SDK needs the server-key path that doesn't exist yet; see [Telemetry ingestion](ingestion.md). |
+| **Game servers** | This is a *client* SDK and only knows player tokens. The server-key path now exists (see [Auth and sessions](auth.md#server-keys)), but there is no SDK for it yet and `/api/server` only has `ping`; see [Telemetry ingestion](ingestion.md). |
 | **Retries and caching** | None. Calls pass straight through, and a `429` is returned to the caller. The simulator does its own retrying. |
 | **Packaging** | Source or DLL by hand for now. A Unity package (UPM) is the likely end state. |
 

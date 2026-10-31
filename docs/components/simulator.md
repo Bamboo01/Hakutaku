@@ -27,10 +27,15 @@ dotnet run -- probe                    # 3 mock players against http://localhost
 dotnet run -- probe --players 10
 dotnet run -- shell
 dotnet run -- probe --url http://localhost:8090   # full Docker stack, or prod over the SSH tunnel
+dotnet run -- probe --admin-password <owner password>   # also checks the server keys
 ```
 
 `--url` defaults to `$HAKUTAKU_URL` if that is set, otherwise
 `http://localhost:5008`.
+
+`--admin-password` is the owner's password (the username is `admin`), or set
+`$HAKUTAKU_ADMIN_PASSWORD`. With it, the probe also makes server keys and checks
+them (see below). Without it, that part is skipped and the probe says so.
 
 ## What `probe` checks
 
@@ -55,7 +60,24 @@ dotnet run -- probe --url http://localhost:8090   # full Docker stack, or prod o
 | Forgot password | `200` (always, so it can't be used to look up accounts) |
 | Reset with a made-up code | `400` |
 | `link/email` with no token, and with a made-up token; `display-name` with no token | `401` |
-| Every player: events, characters, `/api/players`, `/api/admin/*` | **denied** |
+| Every player: events, characters, `/api/players`, `/api/admin/*` (server keys included), `/api/server/ping` | **denied** |
+
+With the owner's password, the probe also signs in as `admin` and checks the
+server keys (`ServerKeyChecks.cs`, over plain HTTP because the SDK has no admin
+calls):
+
+| Step | Expected |
+|---|---|
+| Make a key | `200`, a 43-character key |
+| `/api/server/ping` with no key, and with a wrong key | `401` each |
+| `/api/server/ping` with the fresh key | `200` |
+| A server key on `/api/admin/server-keys`, with no cookie | `401` |
+| Make a second key, check it works, revoke it, check it again | `200`, `204`, then `401` |
+| Make a key that expires in 3 seconds, wait 4, check it | `200`, then `401` |
+| The key list | `200`, and no key in it |
+
+The probe revokes every key it made, so it leaves nothing usable behind. It does
+leave the (revoked) rows, since no route deletes a key.
 
 The probe can't check that **verifying removes the device token**, because that
 needs the real mailed code. Do it in the shell: `new`, `link`, `verify <code>`,

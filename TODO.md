@@ -46,6 +46,10 @@ first start against an empty database.
       the device token. Public routes are rate-limited and have their own Caddy
       `handle` blocks.
 - [x] Optional, non-unique display names (`POST /api/players/display-name`)
+- [x] Server keys for game servers: the `server_keys` table, owner-only
+      `POST`/`GET`/`DELETE /api/admin/server-keys`, the `.RequireServerKey()`
+      filter on the whole `/api/server` group (only `ping` so far), and the keys
+      page in the admin UI. Caddy doesn't proxy `/api/server` yet.
 - [ ] **Refresh tokens.** A verified player has no device token, so once the
       30-day session expires they must type their password again. A long-lived,
       rotating, revocable refresh token per install fixes that, and is also the
@@ -69,8 +73,8 @@ first start against an empty database.
       to change or unlink an email, and old sessions and codes are never deleted
 - [ ] **A player token only unlocks the email routes.** `/api/characters` and
       `/api/events` are still admin-gated, and there is no player logout, no
-      session cleanup and no `player_bans`. No `server_keys` schema exists
-      either. This is what still blocks items 7 and 8.
+      session cleanup and no `player_bans`. Server keys exist now, but only
+      `/api/server/ping` uses them. This is what still blocks items 7 and 8.
 - [ ] Decide whether to move to the TDD's `bigint`/`entities` keys; the player
       tables use `uuid` player ids to match `Players.Id`
 - [ ] Rename the data endpoints to singular (`/api/players` -> `/api/player`)

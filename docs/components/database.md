@@ -81,13 +81,22 @@ erDiagram
         timestamp idle_expires_at
         timestamp revoked_at
     }
+    server_keys {
+        bigint id PK
+        text name
+        bytea key_sha256 UK
+        timestamptz created_at
+        timestamptz expires_at
+        timestamptz revoked_at
+        timestamptz last_used_at
+    }
 ```
 
 ## Two naming conventions, on purpose
 
 | | Game data | Admin and player-auth data |
 |---|---|---|
-| Tables | `Players`, `Characters`, `TelemetryEvents` | `admin_users`, `admin_sessions`, `player_identities`, `player_sessions`, `player_email_codes` |
+| Tables | `Players`, `Characters`, `TelemetryEvents` | `admin_users`, `admin_sessions`, `server_keys`, `player_identities`, `player_sessions`, `player_email_codes` |
 | Naming | PascalCase (EF's default) | snake_case (configured explicitly) |
 | Primary key | `uuid`, generated client-side | `bigint` identity, or a composite key for `player_identities` |
 | Defined in | `server/Models/Players/` | `server/Models/Admin/`, `server/Models/Players/` + `OnModelCreating` in `server/Models/Db.cs` |
@@ -221,6 +230,7 @@ Column notes:
 |---|---|---|
 | `ux_admin_users_username_lower` | `lower(username)` | Case-insensitive unique login. Raw SQL, because EF cannot express a functional index. |
 | Unique index | `admin_sessions.token_hash` | One session per token, and makes lookup an index hit |
+| Unique index | `server_keys.key_sha256` | Looked up by hash on every server call, and no two keys can share one |
 | `ck_admin_users_role` | `role IN (0, 1)` | The role enum, enforced in the database |
 | FK, `ON DELETE CASCADE` | `admin_sessions.admin_id` | Deleting an admin row removes its sessions |
 | FK, `NO ACTION` | `admin_users.created_by` | Self-reference; must not cascade admins into each other |
@@ -270,6 +280,7 @@ app and the schema is current.
 | `20260925095216_AddAdminTables` | `admin_users`, `admin_sessions`, the role check, the lower-email index |
 | `20260929061126_AddIdleExpiryToAdminSessions` | `idle_expires_at` |
 | `20260930162910_AddUsernameToAdminUsers` | Added `username`, backfilled it from `email`, swapped the functional index |
+| `20261031140520_AddServerKeys` | `server_keys`: the hash of each game server key, with its expiry, revoked and last-used times |
 
 That last one is worth reading as an example of a non-trivial migration — it
 backfills existing rows before swapping the unique index, so the seeded owner's

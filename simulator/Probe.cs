@@ -9,9 +9,10 @@
         happened with what was expected. The run exits with 1 on any
         surprise.
 
-        Started from Program.cs. Uses MockPlayer and Report. AccessChecks
-        lists every non-player route and what a player token should get, so
-        update it when a route opens to players.
+        Started from Program.cs. Uses MockPlayer and Report, and
+        ServerKeyChecks when it is given the owner's password.
+        AccessChecks lists every non-player route and what a player token
+        should get, so update it when a route opens to players.
 **************************************************************************/
 using Hakutaku;
 using Hakutaku.ClientModels;
@@ -55,9 +56,13 @@ namespace simulator
             ("raw                    GET /api/events", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/events")).Error),
             ("raw                    GET /api/admin/me", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/admin/me")).Error),
             ("raw                    GET /api/admin/admins", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/admin/admins")).Error),
+            ("raw                    GET /api/admin/server-keys", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/admin/server-keys")).Error),
+            ("raw                    POST /api/admin/server-keys", Expect.Denied, async c => (await c.SendRawRequestAsync("POST", "/api/admin/server-keys", """{"name":"sim"}""")).Error),
+            // A player token isn't a server key, so the server routes refuse it too.
+            ("raw                    GET /api/server/ping", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/server/ping")).Error),
         ];
 
-        public static async Task<int> RunAsync(string url, int playerCount)
+        public static async Task<int> RunAsync(string url, int playerCount, string? adminPassword = null)
         {
             var report = new Report(url);
 
@@ -93,6 +98,12 @@ namespace simulator
                 foreach (var player in players)
                     await RunAccessChecks(player, report);
             }
+
+            // Needs the owner's session, which no player has, so it only runs when given the password.
+            if (adminPassword is null)
+                Report.Note("Server key checks skipped. Give the owner's password (--admin-password, or HAKUTAKU_ADMIN_PASSWORD) to run them.");
+            else
+                await ServerKeyChecks.RunAsync(url, adminPassword, report);
 
             report.PrintSummary();
             return report.Failed == 0 ? 0 : 1;

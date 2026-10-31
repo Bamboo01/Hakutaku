@@ -350,6 +350,35 @@ One-way. No restore endpoint, because nobody needed one.
 - **Bearer equivalence.** Anyone holding the cookie is the admin. There is no
   second factor, which is what `totp_secret` was reserved for.
 
+## Server keys
+
+A game server uses a **server key**, which is a third kind of credential next to
+the admin cookie and the player token. It is sent in the `X-Server-Key` header and
+opens the `/api/server/*` routes only.
+
+- **Made by the owner.** `POST /api/admin/server-keys` (owner only, the same
+  `RequireOwner` check as `CreateAdmin`) makes 32 random bytes, base64url. It is
+  returned once. Only its SHA-256 is stored, in `server_keys.key_sha256`, so a
+  copy of the database can't be used as a server key, like session tokens.
+- **Checked by a filter.** `.RequireServerKey()` (`Auth/ServerKeyGuards.cs`) adds
+  `RequireServerKeyFilter`. It hashes the header and looks up a key with that
+  hash that isn't revoked or expired. That is an indexed lookup by hash, which is
+  fine for the same reason session lookups are: the key is 256 random bits, so
+  there is nothing to guess and no timing to leak.
+- **Refused by default.** A missing, unknown, revoked or expired key gets
+  `401 {error}`, so with no keys in the table every server route is refused.
+- **Bookkeeping.** `last_used_at` is written at most once a minute per key, with
+  one conditional `UPDATE`, so a busy game server doesn't write on every call.
+  The key's id is left on the request (`HttpContext.Items["ServerKeyId"]`) for
+  handlers and logs.
+- **Kept apart from the admin routes.** Admin routes read the cookie and nothing
+  else, so a server key never works on `/api/admin/*`. In the same way, an admin
+  cookie or a player token doesn't open `/api/server/*`.
+- **Revoking** sets `revoked_at` and takes effect on the next call. It is one-way.
+
+The filter sits on the whole `/api/server` group (`Endpoints/GameServer/`), so a
+route added to that group is protected without anyone remembering to do it.
+
 ## Player auth
 
 The player routes are in `server/Endpoints/PlayerAuth/`, and their helpers in `server/Services/`. They reuse the shared helpers (`PasswordHasher.Hash`, `PasswordHasher.Verify`,

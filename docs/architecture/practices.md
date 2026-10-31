@@ -78,7 +78,9 @@ Two changes are planned and have not happened yet:
 - **The paths become singular.** `/api/players` → `/api/player`, and likewise
   for the others.
 - **They become public**, with their own auth — a server key for game servers,
-  player credentials for players. Neither exists.
+  player credentials for players. The server key now exists (see
+  [Auth and sessions](../components/auth.md#server-keys)) and guards `/api/server/*`;
+  player credentials still don't open game data.
 
 !!! note "Build against reality, document the intent"
     Write code against the paths as they are today. When they change, it will be

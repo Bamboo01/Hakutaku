@@ -24,6 +24,7 @@ namespace server.Models
         public DbSet<TelemetryEvent> TelemetryEvents => Set<TelemetryEvent>();
         public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
         public DbSet<AdminSession> AdminSessions => Set<AdminSession>();
+        public DbSet<ServerKey> ServerKeys => Set<ServerKey>();
         public DbSet<PlayerIdentity> PlayerIdentities => Set<PlayerIdentity>();
         public DbSet<PlayerSession> PlayerSessions => Set<PlayerSession>();
         public DbSet<PlayerEmailCode> PlayerEmailCodes => Set<PlayerEmailCode>();
@@ -107,6 +108,20 @@ namespace server.Models
                 e.Property(x => x.RevokedAt).HasColumnName("revoked_at");
                 e.HasIndex(x => x.TokenHash).IsUnique();
                 e.HasOne<AdminUser>().WithMany().HasForeignKey(x => x.AdminId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<ServerKey>(e =>
+            {
+                e.ToTable("server_keys");
+                e.Property(x => x.Id).HasColumnName("id").UseIdentityAlwaysColumn();
+                e.Property(x => x.Name).HasColumnName("name");
+                e.Property(x => x.KeySha256).HasColumnName("key_sha256");
+                e.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
+                e.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+                e.Property(x => x.RevokedAt).HasColumnName("revoked_at");
+                e.Property(x => x.LastUsedAt).HasColumnName("last_used_at");
+                // looked up by hash on every server call, and no two keys can share one
+                e.HasIndex(x => x.KeySha256).IsUnique();
             });
         }
     }

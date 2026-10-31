@@ -15,6 +15,7 @@
 using Microsoft.EntityFrameworkCore;
 using server.Endpoints.Admin;
 using server.Endpoints.Characters;
+using server.Endpoints.GameServer;
 using server.Endpoints.Health;
 using server.Endpoints.PlayerAuth;
 using server.Endpoints.Players;
@@ -56,6 +57,9 @@ app.MapCharacterRoutes();
 app.MapTelemetryRoutes();
 
 app.MapAdminRoutes();
+
+// for the game server, behind a server key. not through caddy yet, so tunnel-only for now
+app.MapGameServerRoutes();
 
 // last on purpose, so any other /api path gets a json 404 instead of the vue page
 app.MapUnknownApiRoutes();

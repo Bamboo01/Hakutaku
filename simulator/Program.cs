@@ -5,7 +5,7 @@ using simulator;
 
 const string Usage = """
     Usage:
-      Hakutaku.Simulator probe [--players N] [--url URL]
+      Hakutaku.Simulator probe [--players N] [--url URL] [--admin-password PW]
       Hakutaku.Simulator shell [--url URL]
 
       (From simulator/ with the .NET SDK: dotnet run -- probe, dotnet run -- shell.)
@@ -17,10 +17,15 @@ const string Usage = """
                 the steps that need an emailed code (with no SMTP, it is in the server log).
 
       --url     The server. Default http://localhost:5008, or $HAKUTAKU_URL if set.
+      --admin-password
+                The owner's password (the username is admin), or $HAKUTAKU_ADMIN_PASSWORD.
+                With it, probe also makes server keys and checks they open /api/server only.
+                It revokes the keys again. Without it that part is skipped.
     """;
 
 var url = Environment.GetEnvironmentVariable("HAKUTAKU_URL") ?? "http://localhost:5008";
 var playerCount = 3;
+var adminPassword = Environment.GetEnvironmentVariable("HAKUTAKU_ADMIN_PASSWORD");
 string? command = null;
 
 for (var i = 0; i < args.Length; i++)
@@ -32,6 +37,9 @@ for (var i = 0; i < args.Length; i++)
             break;
         case "--url" when i + 1 < args.Length:
             url = args[++i];
+            break;
+        case "--admin-password" when i + 1 < args.Length:
+            adminPassword = args[++i];
             break;
         case "--players" when i + 1 < args.Length && int.TryParse(args[i + 1], out var n) && n > 0:
             playerCount = n;
@@ -72,4 +80,4 @@ if (command == "shell")
 }
 
 Console.WriteLine($"Probing {url}");
-return await Probe.RunAsync(url, playerCount);
+return await Probe.RunAsync(url, playerCount, string.IsNullOrEmpty(adminPassword) ? null : adminPassword);

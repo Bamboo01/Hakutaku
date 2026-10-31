@@ -33,5 +33,8 @@ namespace server.Constants
         public const int CharacterNameMaxLength = 50;
         public const int EventTypeMaxLength = 100;
         public const int EventDataMaxBytes = 10_000;
+
+        // what the owner calls a server key, e.g. "homelab"
+        public const int ServerKeyNameMaxLength = 100;
     }
 }
