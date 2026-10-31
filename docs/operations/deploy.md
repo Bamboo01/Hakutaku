@@ -75,7 +75,7 @@ The smoke test retries for about a minute, which covers the app's startup and
 migration time.
 
 !!! note "There is no test stage"
-    Because there is no test suite. `/Health` returning `200` is the only gate.
+    Jenkins doesn't run `server.Tests` yet. `/Health` returning `200` is the only gate.
 
 ## Reaching the admin UI
 

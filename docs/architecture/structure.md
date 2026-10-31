@@ -37,6 +37,7 @@ Hakutaku/
 ├── Jenkinsfile              Deploy + smoke test on merge to master
 ├── docs/                    This wiki
 │
+├── server.Tests/            xUnit tests for the server: unit tests, and integration tests against a real Postgres
 ├── sdk/                     PlayFab-style C# client library (netstandard2.1, for Unity)
 └── simulator/               .NET console app: mock players, through the SDK
 ```
@@ -150,8 +151,8 @@ frontend.
 
 Worth knowing so you do not go looking:
 
-- **No test suite**, in either `server/` or `web/`. The Jenkins pipeline has no
-  test stage because there is nothing to run.
+- **Tests only for the server** (`server.Tests/`). `web/` has none, and the
+  Jenkins pipeline has no test stage, so nothing runs them before a deploy.
 - **No player-facing auth.** `/api/players`, `/api/characters` and `/api/events`
   are gated behind *admin* login as a stopgap. They are meant to be public
   eventually — see [Practices](practices.md).

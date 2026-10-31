@@ -39,7 +39,12 @@ dotnet ef migrations add <Name>
 cd server && dotnet build                # API
 cd web && npm run build                  # vue-tsc typecheck + vite build -> web/dist, copied into wwwroot by Dockerfile
 ```
-No test suite exists in either `server/` or `web/` yet. The nearest thing is the simulator's probe, which needs a running server:
+The server has an xUnit test project, `server.Tests/`: unit tests for the pure helpers, plus integration tests that start the real server in memory against a throwaway Postgres database (start one first with `docker compose -f compose.dev.yaml up -d postgres`, or set `HAKUTAKU_TEST_PG`). `web/` has no tests yet, and Jenkins doesn't run any of them. See `docs/components/tests.md`.
+```bash
+dotnet test server.Tests                                    # everything; needs Postgres on localhost:5432
+dotnet test server.Tests --filter "Category!=Integration"   # unit tests only, no database
+```
+The simulator's probe is the other check, and it needs a running server:
 ```bash
 cd simulator && dotnet run -- probe      # mock players vs http://localhost:5008; --url to point elsewhere
 cd simulator && dotnet run -- shell      # interactive; emailed codes are in the server log when SMTP is unset

@@ -256,8 +256,11 @@ The `Jenkinsfile` in the repo root deploys `compose.yaml` and then smoke-tests
 `/Health` over HTTPS. The job polls GitHub every ~2 minutes and watches `master`.
 
 - [x] Stand up Jenkins on the VM
-- [x] Pipeline stages: deploy → smoke test. There is no separate test stage
-      because there is no test suite yet.
+- [x] Pipeline stages: deploy → smoke test. There is no separate test stage:
+      `server.Tests` exists now but Jenkins doesn't run it.
+- [ ] Run `server.Tests` as a Jenkins stage before the deploy. The integration
+      tests need a Postgres, so the stage needs one (a container, or the one
+      the stack already uses).
 - [x] Deploy mechanism decided (item 5): build on the server
 - [x] Encode it in a `Jenkinsfile`
 - [ ] Confirm a merge to `master` triggers a build by itself. Build #2 (on master)

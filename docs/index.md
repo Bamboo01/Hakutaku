@@ -28,8 +28,9 @@ It is an **early scaffold**, and the docs say so wherever it matters. Three
 entities exist (`Player`, `Character`, `TelemetryEvent`), admin login works,
 and a production stack runs on the DigiPen team43 VM with Jenkins redeploying
 on every merge to `master`. Players can register and log in, but a player
-token doesn't open game data yet. There is no test suite; the closest thing is
-the simulator, whose mock players drive the API through the client SDK.
+token doesn't open game data yet. The server has an xUnit test suite
+(`server.Tests`), and the simulator, whose mock players drive the API through the
+client SDK, checks the live API.
 
 !!! note "The honest status line"
     Everything under [Components](components/server.md) describes code that

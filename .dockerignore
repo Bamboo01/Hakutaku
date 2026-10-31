@@ -4,3 +4,4 @@
 **/dist
 **/wwwroot
 .git
+server.Tests

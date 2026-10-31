@@ -196,4 +196,5 @@ Deliberately listed rather than quietly omitted:
   `disabled_at`.
 - Migrations run on startup, so several app instances against one database would
   race.
-- No test suite anywhere, so CI has no test stage.
+- Tests exist for the server (`server.Tests`) but not for `web/`, and Jenkins
+  doesn't run them, so CI has no test stage.

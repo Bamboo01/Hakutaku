@@ -74,6 +74,7 @@ nav:
       - Web UI: components/web.md
       - SDK: components/sdk.md
       - Simulator: components/simulator.md
+      - Tests: components/tests.md
       - Telemetry ingestion: components/ingestion.md
   - Operations:
       - Deploy and CI/CD: operations/deploy.md
