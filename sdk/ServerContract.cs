@@ -73,9 +73,4 @@ namespace Hakutaku
         public string? PlayerId { get; set; }
         public string? Name { get; set; }
     }
-
-    class ErrorWire
-    {
-        public string? Error { get; set; }
-    }
 }
