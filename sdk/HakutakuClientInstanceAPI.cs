@@ -192,7 +192,6 @@ namespace Hakutaku
                 DisplayName = session.DisplayName,
                 SessionTicket = session.Token ?? "",
                 SessionExpiration = session.ExpiresAt,
-                Xp = session.Xp,
                 DeviceToken = session.DeviceToken,
             };
         }

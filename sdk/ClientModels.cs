@@ -44,7 +44,6 @@ namespace Hakutaku.ClientModels
         public string? DisplayName;
         public string SessionTicket = "";
         public DateTime SessionExpiration;
-        public int Xp;
         // Only from RegisterGuest, and only that once: the server keeps just its hash. Store
         // it like a password, e.g. in the iOS Keychain or Android Keystore.
         public string? DeviceToken;

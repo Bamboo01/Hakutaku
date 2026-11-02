@@ -28,7 +28,6 @@ namespace Hakutaku
     {
         public string? Id { get; set; }
         public string? DisplayName { get; set; }
-        public int Xp { get; set; }
         public string? DeviceToken { get; set; }
         public string? Token { get; set; }
         public DateTime ExpiresAt { get; set; }

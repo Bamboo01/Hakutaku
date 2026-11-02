@@ -185,7 +185,7 @@ namespace simulator
         {
             var player = new MockPlayer($"player-{players.Count + 1}", url);
             var result = await player.Client.RegisterGuestAsync(new RegisterGuestRequest { HardwareId = player.HardwareId, DisplayName = displayName });
-            Show(result, r => $"player {r.PlayerId}, {Named(r.DisplayName)}, xp {r.Xp}\n  device token {r.DeviceToken} (log in again with 'device <token>')");
+            Show(result, r => $"player {r.PlayerId}, {Named(r.DisplayName)}\n  device token {r.DeviceToken} (log in again with 'device <token>')");
             player.DeviceToken = result.Result?.DeviceToken;
             Add(player, result.Result);
         }
@@ -194,7 +194,7 @@ namespace simulator
         {
             var player = new MockPlayer($"player-{players.Count + 1}", url) { DeviceToken = deviceToken };
             var result = await player.Client.LoginWithDeviceTokenAsync(new LoginWithDeviceTokenRequest { DeviceToken = deviceToken });
-            Show(result, r => $"player {r.PlayerId}, {Named(r.DisplayName)}, xp {r.Xp}");
+            Show(result, r => $"player {r.PlayerId}, {Named(r.DisplayName)}");
             Add(player, result.Result);
         }
 
@@ -202,7 +202,7 @@ namespace simulator
         {
             var player = new MockPlayer($"player-{players.Count + 1}", url) { Email = email, Password = password };
             var result = await player.Client.LoginWithEmailAddressAsync(new LoginWithEmailAddressRequest { Email = email, Password = password });
-            Show(result, r => $"player {r.PlayerId}, {Named(r.DisplayName)}, xp {r.Xp}");
+            Show(result, r => $"player {r.PlayerId}, {Named(r.DisplayName)}");
             Add(player, result.Result);
         }
 

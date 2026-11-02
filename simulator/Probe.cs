@@ -52,7 +52,7 @@ namespace simulator
             ("GrantCharacterToUser   POST /api/characters", Expect.Denied, async c => (await c.GrantCharacterToUserAsync(new GrantCharacterToUserRequest { CharacterName = "sim" })).Error),
             // No SDK method for these: no game client should ever call them.
             ("raw                    GET /api/players", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/players")).Error),
-            ("raw                    POST /api/players", Expect.Denied, async c => (await c.SendRawRequestAsync("POST", "/api/players", """{"xp":0}""")).Error),
+            ("raw                    POST /api/players", Expect.Denied, async c => (await c.SendRawRequestAsync("POST", "/api/players", """{}""")).Error),
             ("raw                    GET /api/events", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/events")).Error),
             ("raw                    GET /api/admin/me", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/admin/me")).Error),
             ("raw                    GET /api/admin/admins", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/admin/admins")).Error),
