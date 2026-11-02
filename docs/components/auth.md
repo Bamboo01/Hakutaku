@@ -377,7 +377,9 @@ opens the `/api/server/*` routes only.
 - **Revoking** sets `revoked_at` and takes effect on the next call. It is one-way.
 
 The filter sits on the whole `/api/server` group (`Endpoints/GameServer/`), so a
-route added to that group is protected without anyone remembering to do it.
+route added to that group is protected without anyone remembering to do it. Today
+that group has `ping` and the player data routes (`GET` and `POST
+/api/server/players/{id}/data`).
 
 ## Player auth
 

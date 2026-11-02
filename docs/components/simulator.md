@@ -60,7 +60,7 @@ them (see below). Without it, that part is skipped and the probe says so.
 | Forgot password | `200` (always, so it can't be used to look up accounts) |
 | Reset with a made-up code | `400` |
 | `link/email` with no token, and with a made-up token; `display-name` with no token | `401` |
-| Every player: events, characters, `/api/players`, `/api/admin/*` (server keys included), `/api/server/ping` | **denied** |
+| Every player: events, characters, `/api/players`, `/api/admin/*` (server keys included), `/api/server/ping`, and `/api/server/players/{id}/data` | **denied**. A player's own id and token don't open their own data: that takes a server key |
 
 With the owner's password, the probe also signs in as `admin` and checks the
 server keys (`ServerKeyChecks.cs`, over plain HTTP because the SDK has no admin
@@ -76,8 +76,23 @@ calls):
 | Make a key that expires in 3 seconds, wait 4, check it | `200`, then `401` |
 | The key list | `200`, and no key in it |
 
+With that same fresh key, the probe then acts as a game server on the first mock
+player (`PlayerDataChecks.cs`):
+
+| Step | Expected |
+|---|---|
+| Write `Xp` = 1200 in the ReadOnly tier, then read it back | `200`, the same value |
+| The same write again, then write 1300 | still 1200, then 1300: a write sets, it never adds |
+| Read `Xp,Nope`, read with no keys, read `Xp` in another tier | only `Xp`, every key, nothing |
+| A read with no tier, and with `tier=1` | `400` each |
+| A key with a space, a 65-character key, a 16385-byte value, 11 changes, a key both set and removed | `400` each, and nothing changed |
+| 100 keys in the Internal tier (10 requests of 10), then a 101st | `200`s, then `400` |
+| Remove those 100 keys again | none left |
+| An unknown player, read and write | `404` each |
+
 The probe revokes every key it made, so it leaves nothing usable behind. It does
-leave the (revoked) rows, since no route deletes a key.
+leave the (revoked) rows, since no route deletes a key. It removes the `Xp` and
+the 100 keys it wrote, so the mock player is left with no data.
 
 The probe can't check that **verifying removes the device token**, because that
 needs the real mailed code. Do it in the shell: `new`, `link`, `verify <code>`,

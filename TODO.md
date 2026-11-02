@@ -20,6 +20,15 @@ Roughly in dependency order, across three workstreams: the backend build
 - [x] EF Core migrations for each
 - [x] CRUD/query endpoints for each, following the pattern already in
       `server/Program.cs`
+- [x] Player data: the `player_data` table (player, tier, key, value), and
+      `GET`/`POST /api/server/players/{id}/data` behind the server key, with
+      limits on keys, values and changes per request. XP moved out of
+      `Players.Xp` into a ReadOnly `Xp` key in one migration, and is gone from
+      the player model, the login responses, the SDK and the simulator.
+- [ ] **Run the XP migration on a copy of the production database before
+      merging.** It is tested on made-up data, but merging deploys and the
+      migration runs at startup, so check that every non-zero XP became a
+      ReadOnly `Xp` key on real data first.
 
 ---
 

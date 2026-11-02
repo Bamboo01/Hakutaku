@@ -16,7 +16,7 @@ Hakutaku/
 │   │   ├── Db.cs            The DbContext and the table mappings
 │   │   ├── Admin/           AdminUser, AdminSession, AdminRole, ServerKey
 │   │   └── Players/         Player, Character, TelemetryEvent, PlayerIdentity, PlayerSession, ...
-│   ├── Migrations/          EF Core migration history (12 so far)
+│   ├── Migrations/          EF Core migration history (13 so far)
 │   ├── appsettings.json             Base config
 │   └── appsettings.Development.json Dev connection string (host, not Docker)
 │

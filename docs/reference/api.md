@@ -55,6 +55,8 @@ See [Auth and sessions](../components/auth.md) for the mechanics.
 | POST | `/api/admin/server-keys` | **Owner** | Make a server key; the key comes back once |
 | DELETE | `/api/admin/server-keys/{id}` | **Owner** | Revoke a server key |
 | GET | `/api/server/ping` | **Server key** | Check that a server key works |
+| GET | `/api/server/players/{id}/data` | **Server key** | Read a player's data in one tier |
+| POST | `/api/server/players/{id}/data` | **Server key** | Set and remove keys in one tier of a player's data |
 | POST | `/api/players/register` | Rate-limited, **public** | Make a guest player; returns its device token (once) and a session |
 | POST | `/api/players/login/device` | Rate-limited, **public** | Sign in with a device token; never creates a player |
 | POST | `/api/players/display-name` | Player token, **public**, limited per player | Set the current player's display name |
@@ -64,7 +66,7 @@ See [Auth and sessions](../components/auth.md) for the mechanics.
 | POST | `/api/players/email/resend` | Player token, rate-limited | Mail a new verification code |
 | POST | `/api/players/password/forgot` | Rate-limited, **public** | Mail a password-reset code |
 | POST | `/api/players/password/reset` | Rate-limited, **public** | Set a new password with the code |
-| GET | `/api/players` | Admin | List all players (id, display name, xp, linked providers) |
+| GET | `/api/players` | Admin | List all players (id, display name, linked providers) |
 | POST | `/api/players` | Admin | Create a player |
 | GET | `/api/characters` | Admin | List all characters |
 | POST | `/api/characters` | Admin | Create a character |
@@ -277,6 +279,60 @@ With no keys in the table, every server route is refused. A key's `last_used_at`
 is written at most once a minute. Caddy doesn't proxy `/api/server` yet, so
 these routes are tunnel-only until a `handle` block is added for them.
 
+### Player data
+
+A game server keeps per-player values here, such as a player's XP. Each value is
+one **key** with a text **value**, in one of three **tiers**.
+
+```bash
+# read: every key in a tier, or just the ones asked for
+curl -H "X-Server-Key: <the-key>" \
+  "http://localhost:5008/api/server/players/<player-id>/data?tier=ReadOnly&keys=Xp,Level"
+# {"data":{"Xp":"1200"}}
+
+# write: set some keys and remove others, in one request
+curl -X POST -H "X-Server-Key: <the-key>" -H "Content-Type: application/json" \
+  "http://localhost:5008/api/server/players/<player-id>/data?tier=ReadOnly" \
+  -d '{"data":{"Xp":"1300"},"keysToRemove":["OldKey"]}'
+# {"updated":2}
+```
+
+| Tier | Meant for |
+|---|---|
+| `ClientWritable` | Values the game client may change |
+| `ReadOnly` | Values the client can read but only a game server changes. **XP lives here, as the key `Xp`** |
+| `Internal` | Values only the backend reads and writes |
+
+- **`tier` is required** on both routes. It is given by name, in any case
+  (`readonly` works). A missing or unknown tier, and a number like `tier=1`, get a
+  `400`. A server key can use any tier.
+- **Values are plain text**, as in PlayFab, so a number is sent as a string
+  (`"1200"`) and read back the same way. There is no JSON column.
+- **`keys`** on a read is a comma-separated list. A key that doesn't exist is left
+  out of the answer, and with no `keys` you get every key in that tier. An empty
+  `keys=`, or a blank entry like `Xp,,Foo`, is a `400`: it is never taken to mean
+  "all of them".
+- **A write sets values and never adds to them,** so doing the same write twice
+  changes nothing more. Setting and removing happen in one transaction, all or
+  nothing. `updated` is the number of keys set plus the number of keys actually
+  removed, and removing a key that isn't there is fine.
+- **Anything over a limit is a `400 {"error": "..."}`, and nothing is written:**
+
+| Limit | Value |
+|---|---|
+| Key | 1-64 characters from `A-Z a-z 0-9 _ . -` |
+| Value | 16 KB at most (counted in bytes, not characters), no null character, and not `null` |
+| Keys per tier, per player | 100 at most |
+| Keys changed in one request | 10 at most, sets and removals together |
+| The same key set and removed in one request | not allowed |
+
+| Status | When |
+|---|---|
+| `200` | Read, or written |
+| `400` | A missing or unknown tier, a bad `keys` list, or something over a limit |
+| `401` | No server key, or a key that is unknown, revoked or expired |
+| `404` | No such player, including an id that isn't a GUID |
+
 ---
 
 ## Game data
@@ -291,7 +347,7 @@ parse or format them.
 curl -X POST http://localhost:5008/api/players/register \
   -H "Content-Type: application/json" \
   -d '{"hardwareId":"<e.g. SystemInfo.deviceUniqueIdentifier>","displayName":"Bob"}'
-# {"id":"<player-id>","displayName":"Bob","xp":0,"deviceToken":"<device-token>","token":"<token>","expiresAt":"..."}
+# {"id":"<player-id>","displayName":"Bob","deviceToken":"<device-token>","token":"<token>","expiresAt":"..."}
 ```
 
 No cookie needed. **Every call makes a new guest player.** Nothing is looked
@@ -319,7 +375,7 @@ up, so registering the same hardware twice gives two players.
 curl -X POST http://localhost:5008/api/players/login/device \
   -H "Content-Type: application/json" \
   -d '{"deviceToken":"<device-token>"}'
-# {"id":"<player-id>","displayName":"Bob","xp":0,"token":"<token>","expiresAt":"..."}
+# {"id":"<player-id>","displayName":"Bob","token":"<token>","expiresAt":"..."}
 ```
 
 Starts a new session for the guest the token belongs to. It **never creates a
@@ -487,7 +543,7 @@ the player has. It does not log them in; they sign in again with `login/email`.
 curl -X POST http://localhost:5008/api/players/login/email \
   -H "Content-Type: application/json" \
   -d '{"email":"player@example.com","password":"at-least-8-chars"}'
-# {"id":"<player-id>","displayName":"Sir Bob","xp":0,"token":"<token>","expiresAt":"..."}
+# {"id":"<player-id>","displayName":"Sir Bob","token":"<token>","expiresAt":"..."}
 ```
 
 | Status | When |
@@ -501,7 +557,7 @@ curl -X POST http://localhost:5008/api/players/login/email \
 
 | Endpoint | Fields |
 |---|---|
-| `POST /api/players` | `xp` (integer), optional `displayName` (same rules as [above](#set-the-display-name)). The player gets no credentials, so it can't sign in: those only come from `register` and `link/email` |
+| `POST /api/players` | optional `displayName` (same rules as [above](#set-the-display-name)). The player gets no credentials, so it can't sign in: those only come from `register` and `link/email` |
 | `POST /api/characters` | `playerId` (GUID of an existing player), `name` (1-50 characters, no control characters) |
 | `POST /api/events` | `playerId` (GUID of an existing player), `eventType` (1-100 characters), `data` (a string holding valid JSON, up to 10,000 bytes) |
 
@@ -519,8 +575,8 @@ Responses are small records, not the stored rows: a character is
 ```bash
 curl -b cookies.txt -X POST http://localhost:5008/api/players \
   -H "Content-Type: application/json" \
-  -d '{"xp":0,"displayName":"Test Player"}'
-# {"id":"<player-id>","displayName":"Test Player","xp":0}
+  -d '{"displayName":"Test Player"}'
+# {"id":"<player-id>","displayName":"Test Player"}
 
 curl -b cookies.txt -X POST http://localhost:5008/api/characters \
   -H "Content-Type: application/json" \
