@@ -26,6 +26,8 @@ namespace server.Endpoints.GameServer
 
             group.MapGet("/ping", Ping.Handle);
 
+            group.MapPost("/sessions/validate", ValidateSession.Handle);
+
             group.MapGet("/players/{id}/data", GetPlayerData.Handle);
             group.MapPost("/players/{id}/data", UpdatePlayerData.Handle);
         }

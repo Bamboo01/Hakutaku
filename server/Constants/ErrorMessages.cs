@@ -23,6 +23,9 @@ namespace server.Constants
         // same for a wrong password and an unknown account, so it never says which
         public const string InvalidCredentials = "invalid credentials";
 
+        // sent by the game server's validate route. same for an unknown, revoked and expired ticket
+        public const string InvalidSessionTicket = "unknown, revoked or expired session ticket";
+
         public const string InvalidOrExpiredCode = "invalid or expired code";
         public const string NoEmailLinked = "no email is linked to this player";
         public const string EmailAlreadyLinked = "this player already has an email linked";

@@ -44,5 +44,9 @@ namespace server.Constants
         public const int PlayerDataValueMaxBytes = 16 * 1024;
         public const int PlayerDataMaxKeysPerTier = 100;
         public const int PlayerDataMaxChangesPerRequest = 10;
+
+        // a session ticket is 43 characters (32 random bytes as base64url). anything much longer can't be
+        // one, so it's refused before it is hashed
+        public const int SessionTicketMaxLength = 512;
     }
 }
