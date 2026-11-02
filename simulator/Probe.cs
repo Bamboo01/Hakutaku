@@ -10,7 +10,8 @@
         surprise.
 
         Started from Program.cs. Uses MockPlayer and Report, and
-        ServerKeyChecks when it is given the owner's password.
+        ServerKeyChecks (which runs PlayerDataChecks) when it is given the
+        owner's password.
         AccessChecks lists every non-player route and what a player token
         should get, so update it when a route opens to players.
 **************************************************************************/
@@ -60,6 +61,9 @@ namespace simulator
             ("raw                    POST /api/admin/server-keys", Expect.Denied, async c => (await c.SendRawRequestAsync("POST", "/api/admin/server-keys", """{"name":"sim"}""")).Error),
             // A player token isn't a server key, so the server routes refuse it too.
             ("raw                    GET /api/server/ping", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/server/ping")).Error),
+            // Even a player's own id and token don't open their own data: that takes a server key.
+            ("raw                    GET /api/server/players/{id}/data", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", $"/api/server/players/{c.authenticationContext.PlayerId}/data?tier=ReadOnly")).Error),
+            ("raw                    POST /api/server/players/{id}/data", Expect.Denied, async c => (await c.SendRawRequestAsync("POST", $"/api/server/players/{c.authenticationContext.PlayerId}/data?tier=ReadOnly", """{"data":{"Xp":"999999"}}""")).Error),
         ];
 
         public static async Task<int> RunAsync(string url, int playerCount, string? adminPassword = null)
@@ -103,7 +107,7 @@ namespace simulator
             if (adminPassword is null)
                 Report.Note("Server key checks skipped. Give the owner's password (--admin-password, or HAKUTAKU_ADMIN_PASSWORD) to run them.");
             else
-                await ServerKeyChecks.RunAsync(url, adminPassword, report);
+                await ServerKeyChecks.RunAsync(url, adminPassword, players.FirstOrDefault()?.PlayerId, report);
 
             report.PrintSummary();
             return report.Failed == 0 ? 0 : 1;

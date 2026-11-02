@@ -9,8 +9,9 @@
         while a fresh key works, and that a server key never opens an admin
         route. It revokes every key it made when it is done.
 
-        Run from Probe.cs when an owner password is given. There is no SDK
-        call for any of this, so it uses plain HTTP with a cookie jar.
+        Run from Probe.cs when an owner password is given, and hands its
+        fresh key to PlayerDataChecks.cs. There is no SDK call for any of
+        this, so it uses plain HTTP with a cookie jar.
 **************************************************************************/
 using System.Net;
 using System.Text.Json;
@@ -22,7 +23,7 @@ namespace simulator
         const string Who = "owner";
         const string Ping = "/api/server/ping";
 
-        public static async Task RunAsync(string url, string adminPassword, Report report)
+        public static async Task RunAsync(string url, string adminPassword, string? playerId, Report report)
         {
             Report.Heading("Server keys, as the owner");
 
@@ -52,6 +53,12 @@ namespace simulator
             // a server key opens server routes only, never an admin route
             var onAdmin = await anonymous.SendAsync(HttpMethod.Get, "/api/admin/server-keys", serverKey: fresh.Value.Key);
             report.Assert(Who, "GET /api/admin/server-keys (server key, no cookie)", onAdmin.Status == 401, $"{onAdmin.Status}");
+
+            // the same key opens the player data routes, on the first mock player
+            if (playerId is null)
+                Report.Note("No mock player to test player data with.");
+            else
+                await PlayerDataChecks.RunAsync(anonymous, fresh.Value.Key, playerId, report);
 
             // revoking one: it works, then it doesn't
             var toRevoke = await MakeKey(owner, report, "sim-probe-revoked", null, madeIds);
