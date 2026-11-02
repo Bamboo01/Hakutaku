@@ -36,5 +36,13 @@ namespace server.Constants
 
         // what the owner calls a server key, e.g. "homelab"
         public const int ServerKeyNameMaxLength = 100;
+
+        // player data, which a game server reads and writes. a value is text, and the cap is bytes (not
+        // characters) since that's what gets stored. the per-request cap stops one call doing a lot of
+        // writes, and the per-tier cap stops one player collecting keys forever
+        public const int PlayerDataKeyMaxLength = 64;
+        public const int PlayerDataValueMaxBytes = 16 * 1024;
+        public const int PlayerDataMaxKeysPerTier = 100;
+        public const int PlayerDataMaxChangesPerRequest = 10;
     }
 }

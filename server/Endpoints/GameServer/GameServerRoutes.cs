@@ -25,6 +25,9 @@ namespace server.Endpoints.GameServer
             var group = app.MapGroup("/api/server").RequireServerKey();
 
             group.MapGet("/ping", Ping.Handle);
+
+            group.MapGet("/players/{id}/data", GetPlayerData.Handle);
+            group.MapPost("/players/{id}/data", UpdatePlayerData.Handle);
         }
     }
 }
