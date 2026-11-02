@@ -38,7 +38,7 @@ namespace server.Endpoints.PlayerAuth
                 return Results.Json(new { error = "unknown device token" }, statusCode: StatusCodes.Status401Unauthorized);
 
             var (token, expiresAt) = await sessions.IssueSession(player.Id);
-            return Results.Ok(new { id = player.Id, displayName = player.DisplayName, xp = player.Xp, token, expiresAt });
+            return Results.Ok(new { id = player.Id, displayName = player.DisplayName, token, expiresAt });
         }
     }
 }

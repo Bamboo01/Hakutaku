@@ -25,6 +25,7 @@ namespace server.Models
         public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
         public DbSet<AdminSession> AdminSessions => Set<AdminSession>();
         public DbSet<ServerKey> ServerKeys => Set<ServerKey>();
+        public DbSet<PlayerDataEntry> PlayerData => Set<PlayerDataEntry>();
         public DbSet<PlayerIdentity> PlayerIdentities => Set<PlayerIdentity>();
         public DbSet<PlayerSession> PlayerSessions => Set<PlayerSession>();
         public DbSet<PlayerEmailCode> PlayerEmailCodes => Set<PlayerEmailCode>();
@@ -77,6 +78,20 @@ namespace server.Models
                 e.Property(x => x.Attempts).HasColumnName("attempts");
                 e.Property(x => x.UsedAt).HasColumnName("used_at");
                 e.HasIndex(x => new { x.PlayerId, x.Purpose, x.CreatedAt });
+                e.HasOne<Player>().WithMany().HasForeignKey(x => x.PlayerId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<PlayerDataEntry>(e =>
+            {
+                e.ToTable("player_data", t => t.HasCheckConstraint("ck_player_data_tier", "tier IN (0, 1, 2)"));
+                // a player has at most one value per key in each tier, and the key is the way in, so it is the primary key
+                e.HasKey(x => new { x.PlayerId, x.Tier, x.Key });
+                e.Property(x => x.PlayerId).HasColumnName("player_id");
+                e.Property(x => x.Tier).HasColumnName("tier");
+                e.Property(x => x.Key).HasColumnName("key");
+                e.Property(x => x.Value).HasColumnName("value");
+                e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+                // goes when the player goes
                 e.HasOne<Player>().WithMany().HasForeignKey(x => x.PlayerId).OnDelete(DeleteBehavior.Cascade);
             });
 

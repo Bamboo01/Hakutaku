@@ -7,8 +7,9 @@
         proves who they are lives in PlayerIdentity, not on this row. The
         display name is an optional label and is not unique.
 
-        Related to PlayerIdentity, PlayerSession, PlayerEmailCode, Character
-        and TelemetryEvent. Table mapped in Db.cs.
+        Related to PlayerIdentity, PlayerSession, PlayerEmailCode, Character,
+        TelemetryEvent and PlayerDataEntry (where xp lives now). Table
+        mapped in Db.cs.
 **************************************************************************/
 namespace server.Models
 {
@@ -17,7 +18,6 @@ namespace server.Models
     public class Player
     {
         public Guid Id { get; set; }
-        public int Xp { get; set; }
         // what the game shows for this player. optional and not unique, it's a label and not a way to
         // sign in, so two players can both be "Bob". see PlayerInputRules.TryNormalizeDisplayName
         public string? DisplayName { get; set; }

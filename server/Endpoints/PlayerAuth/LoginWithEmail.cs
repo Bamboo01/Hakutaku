@@ -47,7 +47,7 @@ namespace server.Endpoints.PlayerAuth
                 return Results.Json(new { error = "this email isn't verified yet; enter the code mailed to it first" }, statusCode: StatusCodes.Status403Forbidden);
 
             var (token, expiresAt) = await sessions.IssueSession(identity.PlayerId);
-            return Results.Ok(new { id = identity.PlayerId, displayName = identity.Player.DisplayName, xp = identity.Player.Xp, token, expiresAt });
+            return Results.Ok(new { id = identity.PlayerId, displayName = identity.Player.DisplayName, token, expiresAt });
         }
     }
 }

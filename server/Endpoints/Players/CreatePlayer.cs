@@ -16,7 +16,7 @@ using server.Services;
 
 namespace server.Endpoints.Players
 {
-    public record AdminCreatePlayerRequest(int Xp, string? DisplayName);
+    public record AdminCreatePlayerRequest(string? DisplayName);
 
     public static class CreatePlayer
     {
@@ -27,10 +27,10 @@ namespace server.Endpoints.Players
             if (!PlayerInputRules.TryNormalizeDisplayName(request.DisplayName, out var displayName))
                 return Results.BadRequest(new { error = ErrorMessages.DisplayNameRule });
 
-            var player = new Player { Xp = request.Xp, DisplayName = displayName };
+            var player = new Player { DisplayName = displayName };
             db.Players.Add(player);
             await db.SaveChangesAsync();
-            return Results.Ok(new { id = player.Id, displayName = player.DisplayName, xp = player.Xp });
+            return Results.Ok(new { id = player.Id, displayName = player.DisplayName });
         }
     }
 }

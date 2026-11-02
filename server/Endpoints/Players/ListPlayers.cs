@@ -27,7 +27,6 @@ namespace server.Endpoints.Players
                 {
                     id = p.Id,
                     displayName = p.DisplayName,
-                    xp = p.Xp,
                     providers = db.PlayerIdentities.Where(i => i.PlayerId == p.Id).Select(i => i.Provider).ToList(),
                 })
                 .ToListAsync();
@@ -37,7 +36,6 @@ namespace server.Endpoints.Players
             {
                 p.id,
                 p.displayName,
-                p.xp,
                 providers = p.providers.Select(PlayerIdentityService.ProviderName).Order().ToList(),
             }));
         }
