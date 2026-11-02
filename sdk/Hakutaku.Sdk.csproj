@@ -17,4 +17,10 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- the tests call the internal HakutakuHttp directly, to check the HTTP code that the client and
+         server SDKs share -->
+    <InternalsVisibleTo Include="server.Tests" />
+  </ItemGroup>
+
 </Project>
