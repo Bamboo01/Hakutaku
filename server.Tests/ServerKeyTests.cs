@@ -167,6 +167,15 @@ namespace server.Tests
         }
 
         [Fact]
+        public async Task An_oversized_key_gets_401_like_a_wrong_one()
+        {
+            var reply = await app.Api().Get(Ping, serverKey: new string('a', Constants.Limits.ServerKeyMaxLength + 1));
+
+            Assert.Equal(HttpStatusCode.Unauthorized, reply.Status);
+            Assert.Equal(Auth.RequireServerKeyFilter.InvalidKeyError, reply.Error);
+        }
+
+        [Fact]
         public async Task A_revoked_key_stops_working_at_once()
         {
             var owner = await Owner();

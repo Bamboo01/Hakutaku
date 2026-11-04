@@ -48,5 +48,8 @@ namespace server.Constants
         // a session ticket is 43 characters (32 random bytes as base64url). anything much longer can't be
         // one, so it's refused before it is hashed
         public const int SessionTicketMaxLength = 512;
+
+        // a server key is the same shape (32 random bytes as base64url, 43 characters), so it gets the same cap
+        public const int ServerKeyMaxLength = 512;
     }
 }

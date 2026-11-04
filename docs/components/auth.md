@@ -366,11 +366,17 @@ opens the `/api/server/*` routes only.
   fine for the same reason session lookups are: the key is 256 random bits, so
   there is nothing to guess and no timing to leak.
 - **Refused by default.** A missing, unknown, revoked or expired key gets
-  `401 {error}`, so with no keys in the table every server route is refused.
-- **Bookkeeping.** `last_used_at` is written at most once a minute per key, with
-  one conditional `UPDATE`, so a busy game server doesn't write on every call.
-  The key's id is left on the request (`HttpContext.Items["ServerKeyId"]`) for
-  handlers and logs.
+  `401 {error}`, so with no keys in the table every server route is refused. So
+  does one over 512 characters (`Limits.ServerKeyMaxLength`), which can't be a
+  real 43-character key and isn't hashed.
+- **Bookkeeping.** `last_used_at` is written at most once a minute per key. The
+  lookup also reads `last_used_at`, so a key used under a minute ago costs one
+  query and no write. Otherwise one conditional `UPDATE` repeats the check, so
+  two calls at once can't both write. The key's id is left on the request
+  (`HttpContext.Items["ServerKeyId"]`) for handlers and logs. When a server call
+  fails with a `500`, the exception handler (`Hosting/ApiErrors.cs`) logs
+  `Server key {id} made the request that failed`, under the `GameServer`
+  category, right after the exception itself.
 - **Kept apart from the admin routes.** Admin routes read the cookie and nothing
   else, so a server key never works on `/api/admin/*`. In the same way, an admin
   cookie or a player token doesn't open `/api/server/*`.

@@ -273,7 +273,7 @@ curl -H "X-Server-Key: <the-key>" http://localhost:5008/api/server/ping
 | Status | When |
 |---|---|
 | `200` | A valid key. `ping` says which key it was |
-| `401` | No key, or a key that is unknown, revoked or expired. The body is `{"error": "..."}` |
+| `401` | No key, or a key that is unknown, revoked, expired or over 512 characters. The body is `{"error": "..."}` |
 
 With no keys in the table, every server route is refused. A key's `last_used_at`
 is written at most once a minute. Caddy doesn't proxy `/api/server` yet, so

@@ -7,7 +7,8 @@
         memory for the integration tests. Each factory makes its own empty
         Postgres database, so the server runs its migrations like on a
         fresh start, and drops the database when the tests are done. Mail
-        goes to a CapturingEmailSender instead of the network.
+        goes to a CapturingEmailSender instead of the network, and every log
+        line is also kept in a CapturingLoggerProvider.
 
         The Postgres server comes from the HAKUTAKU_TEST_PG environment
         variable, or the local dev compose database by default. Used by the
@@ -18,6 +19,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using server.SEmail;
 
@@ -37,6 +39,7 @@ namespace server.Tests.Support
 
         public string ConnectionString => $"{serverConnection};Database={dbName}";
         public CapturingEmailSender Mail { get; } = new();
+        public CapturingLoggerProvider Logs { get; } = new();
 
         public HakutakuFactory()
         {
@@ -61,6 +64,7 @@ namespace server.Tests.Support
             builder.UseContentRoot(ServerDirectory());
             builder.UseSetting("ConnectionStrings:Db", ConnectionString);
             builder.UseSetting("HAKUTAKU_ADMIN_PASSWORD", OwnerPassword);
+            builder.ConfigureLogging(logging => logging.AddProvider(Logs));
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IEmailSender>();

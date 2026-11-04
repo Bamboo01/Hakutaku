@@ -6,13 +6,15 @@
 \brief  This file defines RequireServerKeyFilter, the endpoint filter behind
         RequireServerKey. It reads the X-Server-Key header, hashes it and
         looks for a key with that hash that is neither revoked nor expired.
-        A missing, unknown, revoked or expired key gets a 401, so with no
-        keys in the table every server route is refused.
+        A missing, oversized, unknown, revoked or expired key gets a 401,
+        so with no keys in the table every server route is refused. A good
+        key costs one query, plus a last-used write at most once a minute.
 
         Added to routes by RequireServerKey in ServerKeyGuards.cs. Reads
         ServerKey rows through Db.
 **************************************************************************/
 using Microsoft.EntityFrameworkCore;
+using server.Constants;
 using server.Hosting;
 using server.Models;
 
@@ -31,26 +33,33 @@ namespace server.Auth
             var presented = context.HttpContext.Request.Headers[ServerKeyGuards.HeaderName].ToString().Trim();
             if (presented.Length == 0)
                 return Results.Json(new { error = MissingKeyError }, statusCode: StatusCodes.Status401Unauthorized);
+            // a real key is 43 characters, so anything much longer can't be one and isn't worth hashing
+            if (presented.Length > Limits.ServerKeyMaxLength)
+                return Results.Json(new { error = InvalidKeyError }, statusCode: StatusCodes.Status401Unauthorized);
 
             // looked up by hash, which is indexed. same reasoning as session tokens: the key is 256 random
             // bits and only its hash is compared, so there's nothing to guess and no timing to leak
             var hash = TokenHasher.Hash(presented);
             var now = time.UtcNow();
-            var id = await db.ServerKeys
+            var key = await db.ServerKeys
                 .Where(k => k.KeySha256 == hash && k.RevokedAt == null && (k.ExpiresAt == null || k.ExpiresAt > now))
-                .Select(k => (long?)k.Id)
+                .Select(k => new { k.Id, k.LastUsedAt })
                 .FirstOrDefaultAsync();
-            if (id is null)
+            if (key is null)
                 return Results.Json(new { error = InvalidKeyError }, statusCode: StatusCodes.Status401Unauthorized);
 
-            // a conditional update, so two calls at once can't both write and nothing is loaded for it
+            // checked in memory first, so the usual call (used under a minute ago) costs one query and not two.
+            // the update repeats the check, so two calls at once can't both write
             var cutoff = now - LastUsedEvery;
-            await db.ServerKeys
-                .Where(k => k.Id == id && (k.LastUsedAt == null || k.LastUsedAt < cutoff))
-                .ExecuteUpdateAsync(s => s.SetProperty(k => k.LastUsedAt, now));
+            if (key.LastUsedAt is null || key.LastUsedAt < cutoff)
+            {
+                await db.ServerKeys
+                    .Where(k => k.Id == key.Id && (k.LastUsedAt == null || k.LastUsedAt < cutoff))
+                    .ExecuteUpdateAsync(s => s.SetProperty(k => k.LastUsedAt, now));
+            }
 
-            // so a handler or a log line can say which key made the call
-            context.HttpContext.Items[ServerKeyGuards.ItemKey] = id.Value;
+            // so a handler or a log line can say which key made the call (ApiErrors names it on a 500)
+            context.HttpContext.Items[ServerKeyGuards.ItemKey] = key.Id;
             return await next(context);
         }
     }
