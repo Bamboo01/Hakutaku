@@ -30,8 +30,7 @@ namespace Hakutaku
         ServiceUnavailable,
         // 400, or a call that was refused here before sending (an empty player id, say)
         InvalidParams,
-        // 404: no such player. On the public domain, Caddy also answers 404 for every route it doesn't
-        // proxy, and today that includes /api/server/*
+        // 404: no such player, or a route that doesn't exist
         NotFound,
         // 429
         TooManyRequests,

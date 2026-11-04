@@ -6,6 +6,7 @@ using simulator;
 const string Usage = """
     Usage:
       Hakutaku.Simulator probe [--players N] [--url URL] [--admin-password PW]
+                               [--server-key KEY] [--revoked-key KEY] [--expired-key KEY]
       Hakutaku.Simulator shell [--url URL]
 
       (From simulator/ with the .NET SDK: dotnet run -- probe, dotnet run -- shell.)
@@ -21,11 +22,21 @@ const string Usage = """
                 The owner's password (the username is admin), or $HAKUTAKU_ADMIN_PASSWORD.
                 With it, probe also makes server keys and checks they open /api/server only.
                 It revokes the keys again. Without it that part is skipped.
+      --server-key
+                A live server key from the keys page, or $HAKUTAKU_SERVER_KEY (the variable
+                keeps it out of your shell history). For production, where the probe can't
+                make keys: it checks the key opens /api/server and not /api/admin, then
+                validates a ticket and writes and reads Xp through the server SDK.
+      --revoked-key, --expired-key
+                A key you revoked, and one past its expiry. Each is checked to be refused.
     """;
 
 var url = Environment.GetEnvironmentVariable("HAKUTAKU_URL") ?? "http://localhost:5008";
 var playerCount = 3;
 var adminPassword = Environment.GetEnvironmentVariable("HAKUTAKU_ADMIN_PASSWORD");
+var serverKey = Environment.GetEnvironmentVariable("HAKUTAKU_SERVER_KEY");
+string? revokedKey = null;
+string? expiredKey = null;
 string? command = null;
 
 for (var i = 0; i < args.Length; i++)
@@ -40,6 +51,15 @@ for (var i = 0; i < args.Length; i++)
             break;
         case "--admin-password" when i + 1 < args.Length:
             adminPassword = args[++i];
+            break;
+        case "--server-key" when i + 1 < args.Length:
+            serverKey = args[++i];
+            break;
+        case "--revoked-key" when i + 1 < args.Length:
+            revokedKey = args[++i];
+            break;
+        case "--expired-key" when i + 1 < args.Length:
+            expiredKey = args[++i];
             break;
         case "--players" when i + 1 < args.Length && int.TryParse(args[i + 1], out var n) && n > 0:
             playerCount = n;
@@ -80,4 +100,6 @@ if (command == "shell")
 }
 
 Console.WriteLine($"Probing {url}");
-return await Probe.RunAsync(url, playerCount, string.IsNullOrEmpty(adminPassword) ? null : adminPassword);
+// unset and blank both mean "not given". passed through as typed: a password may start or end with a space
+static string? Given(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+return await Probe.RunAsync(url, playerCount, Given(adminPassword), new GivenKeys(Given(serverKey), Given(revokedKey), Given(expiredKey)));

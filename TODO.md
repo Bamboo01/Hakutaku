@@ -57,8 +57,19 @@ first start against an empty database.
 - [x] Optional, non-unique display names (`POST /api/players/display-name`)
 - [x] Server keys for game servers: the `server_keys` table, owner-only
       `POST`/`GET`/`DELETE /api/admin/server-keys`, the `.RequireServerKey()`
-      filter on the whole `/api/server` group (only `ping` so far), and the keys
-      page in the admin UI. Caddy doesn't proxy `/api/server` yet.
+      filter on the whole `/api/server` group, and the keys page in the admin UI.
+      Caddy proxies `/api/server/*` publicly, so a homelab game server can reach it.
+- [x] Session validate (`POST /api/server/sessions/validate`) and the server SDK
+      (`sdk-server/`) with `AuthenticateSessionTicket`, `GetUserReadOnlyData` and
+      `UpdateUserReadOnlyData`
+- [ ] **Go live for the game server:** merge, make the production key on the
+      keys page, put it in the homelab's environment as `HAKUTAKU_SERVER_KEY`,
+      curl validate and an XP read and write from the homelab, run the probe
+      against production with `--server-key` (and `--revoked-key`,
+      `--expired-key`), then tell the lead it's live
+- [ ] Refused server keys aren't rate-limited. Each costs one indexed lookup, so
+      this is cheap, but a loose per-IP limit on failures would be tidy now that
+      `/api/server/*` is public
 - [ ] **Refresh tokens.** A verified player has no device token, so once the
       30-day session expires they must type their password again. A long-lived,
       rotating, revocable refresh token per install fixes that, and is also the
@@ -74,16 +85,15 @@ first start against an empty database.
       set in `/var/lib/jenkins/hakutaku.env` on the VM, production only writes
       the codes to the app log, and nobody gets an email. It also needs a sender
       address that mail providers will accept, which a `nip.io` domain is not.
-- [ ] Unverified emails can still be claimed by someone else, so the real
-      owner gets no code (link/email answers the same for a taken email, to avoid
-      leaking who has an account); decide whether they should expire or be
-      reclaimable. `verify` and `resend` still give a taken-email caller away.
+- [x] An unverified email only holds its address for 24 hours; after that the
+      next link replaces it, so nobody can lock the real owner out
+- [ ] `verify` and `resend` still give a taken-email caller away.
       Also: no way
       to change or unlink an email, and old sessions and codes are never deleted
 - [ ] **A player token only unlocks the email routes.** `/api/characters` and
       `/api/events` are still admin-gated, and there is no player logout, no
-      session cleanup and no `player_bans`. Server keys exist now, but only
-      `/api/server/ping` uses them. This is what still blocks items 7 and 8.
+      session cleanup and no `player_bans`. A game server reaches player data
+      with a server key instead. This is what still blocks items 7 and 8.
 - [ ] Decide whether to move to the TDD's `bigint`/`entities` keys; the player
       tables use `uuid` player ids to match `Players.Id`
 - [ ] Rename the data endpoints to singular (`/api/players` -> `/api/player`)

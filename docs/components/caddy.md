@@ -41,8 +41,8 @@ Two things are bought with that hop:
 
 	# The public player-auth routes (server/Endpoints/PlayerAuth/). register and both logins
 	# are unauthenticated and rate-limited on the app side; link/email needs a player
-	# session token. Everything else under /api stays tunnel-only until the rest
-	# of the player API exists (see TODO.md item 2).
+	# session token. Everything else under /api, apart from /api/server/* below,
+	# stays tunnel-only until the rest of the player API exists (see TODO.md item 2).
 	handle /api/players/register {
 		reverse_proxy app:8080
 	}
@@ -74,6 +74,14 @@ Two things are bought with that hop:
 		reverse_proxy app:8080
 	}
 
+	# The game server's routes (server/Endpoints/GameServer/): session validate and
+	# player data. Public because the game server reaches Hakutaku over the internet
+	# from a homelab. Every route in that group needs a server key (X-Server-Key),
+	# checked on the whole group in the app, so the key is the protection here.
+	handle /api/server/* {
+		reverse_proxy app:8080
+	}
+
 	handle {
 		respond 404
 	}
@@ -89,10 +97,23 @@ Two things are bought with that hop:
 }
 ```
 
-That is the entire public surface of the project: **`/Health` and the nine
-player-auth routes on the main domain, plus the wiki on its own subdomain**.
-Each `handle` matches one exact path, so a route that is not listed gets the
-`404` catch-all even if the app has it.
+That is the entire public surface of the project: **`/Health`, the nine
+player-auth routes and the game server's `/api/server/*` on the main domain, plus
+the wiki on its own subdomain**. Every `handle` but one matches one exact path,
+so a route that is not listed gets the `404` catch-all even if the app has it.
+
+**`/api/server/*` is the one prefix.** It's safe as a prefix because the app
+puts the server-key check on the whole `/api/server` group, so a route added
+there later is born behind the key. Caddy cleans the path before matching, so
+`/api/server/../admin/me` is matched as `/api/admin/me` and gets the `404`. After
+a deploy that touches this block, confirm it from outside. `--path-as-is` stops
+curl from cleaning the path itself, and both lines should get an **empty `404`**
+from Caddy, not the app's JSON `401`:
+
+```bash
+curl -si --path-as-is https://51.79.242.169.nip.io/api/server/../admin/me | head -3
+curl -si --path-as-is https://51.79.242.169.nip.io/api/server/%2e%2e/admin/me | head -3
+```
 
 ### Reading it line by line
 

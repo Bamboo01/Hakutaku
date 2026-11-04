@@ -58,7 +58,7 @@ app.MapTelemetryRoutes();
 
 app.MapAdminRoutes();
 
-// for the game server, behind a server key. not through caddy yet, so tunnel-only for now
+// for the game server, behind a server key. public through caddy, so the key is what protects them
 app.MapGameServerRoutes();
 
 // last on purpose, so any other /api path gets a json 404 instead of the vue page

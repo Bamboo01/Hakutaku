@@ -37,6 +37,34 @@ dotnet run -- probe --admin-password <owner password>   # also checks the server
 `$HAKUTAKU_ADMIN_PASSWORD`. With it, the probe also makes server keys and checks
 them (see below). Without it, that part is skipped and the probe says so.
 
+### Against production: keys given on the command line
+
+On the public domain the probe can't sign in as the owner, because `/api/admin`
+is tunnel-only. So it can't make keys either. Make them on the keys page instead
+and hand them in:
+
+```bash
+export HAKUTAKU_SERVER_KEY=<the live key>        # or --server-key, which lands in your shell history
+dotnet run -- probe --url https://51.79.242.169.nip.io \
+  --revoked-key <a key you revoked> --expired-key <a key past its expiry>
+```
+
+| Step (`GivenKeyChecks.cs`) | Expected |
+|---|---|
+| `/api/server/ping` and `sessions/validate` with no key | `401` each |
+| `ping` with the revoked key, and with the expired key | `401` each (skipped, with a note, if not given) |
+| `ping` with the live key | `200` |
+| The live key on `/api/admin/me` and `/api/admin/server-keys` | denied (`401`, or Caddy's `404` on the public domain) |
+| Then the server SDK checks below: validate a fresh player's real ticket, write `Xp` and read it back | as below |
+
+A player ticket on `/api/server/*` (including `sessions/validate`) is in the
+`AccessChecks` table, which runs every time. Every mock player the probe makes on
+production stays in that database for good. The probe removes the `Xp` it wrote.
+
+To make an expired key: generate one on the keys page with an expiry a minute
+ahead, and wait. A revoked key is any key you then revoke on the same page. Both
+are useless once refused, so they're safe to pass on the command line.
+
 ## What `probe` checks
 
 | Step | Expected |
@@ -189,6 +217,7 @@ You can, with two things to know:
 | `ServerKeyChecks.cs` | With the owner's password: makes, uses, revokes and expires server keys, then hands a fresh key to the two below |
 | `PlayerDataChecks.cs` | The player data routes over plain HTTP, as a game server |
 | `ServerSdkChecks.cs` | The same job through the server SDK (`sdk-server/`): validate a ticket, write and read `Xp`, and the error split |
+| `GivenKeyChecks.cs` | With `--server-key`, `--revoked-key` or `--expired-key`: the refusals and XP end to end, for production where the probe can't make keys |
 | `Report.cs` | Prints each check as `ok` / `FAIL` and keeps the tally |
 | `Shell.cs` | The interactive commands |
 

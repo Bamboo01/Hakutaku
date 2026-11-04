@@ -40,6 +40,7 @@ Two things follow from this, and both are intentional:
 | `POST /api/players/register`, `login/device`, `login/email` | **Yes** | `https://51.79.242.169.nip.io/api/players/...` — rate-limited, each returns a player session token |
 | `POST /api/players/display-name`, `link/email`, `email/verify`, `email/resend` | **Yes** | `https://51.79.242.169.nip.io/api/players/...` — need a player token; verify and resend are rate-limited per IP, display-name per player |
 | `POST /api/players/password/forgot`, `password/reset` | **Yes** | `https://51.79.242.169.nip.io/api/players/password/...` — unauthenticated, rate-limited, tied to a mailed code |
+| `/api/server/*` (ping, session validate, player data) | **Yes** | `https://51.79.242.169.nip.io/api/server/...` — every route needs a server key in `X-Server-Key` |
 | The admin UI | No | SSH tunnel only |
 | `/api/admin/*` | No | SSH tunnel only |
 | `/api/players` (list/create), `/api/characters`, `/api/events` | No | SSH tunnel only, *and* admin-gated |
@@ -47,15 +48,16 @@ Two things follow from this, and both are intentional:
 | Jenkins | No | SSH tunnel on a separate port |
 | **This wiki** | **Yes** | `https://docs.51.79.242.169.nip.io` |
 
-So there are exactly **three** kinds of public surface, and each has a stated reason:
+So there are exactly **four** kinds of public surface, and each has a stated reason:
 
 - **`/Health`** — the Jenkins smoke test curls it over HTTPS after every deploy.
 - **The player-auth routes** (`register`, `login/device`, `login/email`, `display-name`, `link/email`, the email verification pair and the password reset pair) — a player has to be able to identify themselves, and recover an account, before any other auth can exist. They are the only game-data paths with their own `handle` blocks in `caddy/Caddyfile`. Everything unauthenticated among them is rate-limited per IP; `display-name`, `link/email`, `email/verify` and `email/resend` are gated by a player session token.
+- **The game server's routes** (`/api/server/*`) — the game server runs on a homelab and reaches Hakutaku over the internet. The app checks a server key on the whole `/api/server` group, so the key is the protection, and a key can be revoked on the keys page at once.
 - **The wiki** — onboarding is useless if reading it requires an SSH tunnel.
 
 !!! warning "The wiki describes the system's internals"
-    Internal ports, the tunnel, the deploy mechanism, and the fact that
-    `/Health` is the only public API route. That is a deliberate trade: the team
+    Internal ports, the tunnel, the deploy mechanism, and the exact list of
+    public API routes. That is a deliberate trade: the team
     can read it without setup. If it stops being an acceptable trade, Caddy
     `basic_auth` on the docs site block is the whole fix — see
     [Caddy](../components/caddy.md#the-docs-subdomain).

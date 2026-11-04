@@ -253,16 +253,16 @@ build checks this.
 The same Unity rules apply as for `sdk/`: `netstandard2.1`, C# 9, Newtonsoft,
 and `#nullable enable` at the top of every file.
 
-!!! warning "The game server can only reach Hakutaku through the tunnel for now"
-    Caddy doesn't proxy `/api/server/*` yet, so on the public domain these calls
-    get a `404` (`NotFound`). A game server outside the VM needs the SSH tunnel
-    until a `handle` block is added for those routes.
+Caddy proxies `/api/server/*` publicly, so a game server outside the VM (the
+homelab) uses the public URL, `https://51.79.242.169.nip.io`. How the game
+server must read and write XP (never write after a failed read, one write in
+flight per player, at most every 30 seconds) is in the
+[API reference](../reference/api.md#how-a-game-server-must-use-xp).
 
 ## Still open
 
 | Question | Notes |
 |---|---|
-| **Game servers on the public domain** | The server SDK exists (see above), but Caddy doesn't proxy `/api/server/*` yet, so a game server has to use the SSH tunnel. |
 | **Retries and caching** | None. Calls pass straight through, and a `429` is returned to the caller. The simulator does its own retrying. |
 | **Packaging** | Source or DLL by hand for now. A Unity package (UPM) is the likely end state. |
 

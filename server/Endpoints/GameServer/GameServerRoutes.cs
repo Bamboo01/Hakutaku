@@ -19,7 +19,8 @@ namespace server.Endpoints.GameServer
     {
         // only file that knows the urls and who can call them, one line per route. the key check goes on
         // the whole group, so a route added later can't be left open by mistake. these are for the game
-        // server only, and caddy doesn't proxy /api/server yet, so for now they're tunnel-only
+        // server only. caddy makes /api/server/* public, since the game server calls in over the internet,
+        // so this group-wide key check is the only thing protecting them
         public static void MapGameServerRoutes(this IEndpointRouteBuilder app)
         {
             var group = app.MapGroup("/api/server").RequireServerKey();
