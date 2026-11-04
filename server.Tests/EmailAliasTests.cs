@@ -73,6 +73,8 @@ namespace server.Tests
             var name = NewName();
             var owner = await api.RegisterGuest();
             await api.LinkEmail(owner.Token, $"{name}@gmail.com");
+            // only a verified owner is warned, an unverified link never proved the address is theirs
+            await app.Run($"update player_identities set verified_at = now() where player_id = '{owner.Id}' and provider = 1");
 
             foreach (var alias in new[] { Dotted(name) + "@gmail.com", name + "+a@gmail.com", name + "@googlemail.com" })
                 await api.LinkEmail((await api.RegisterGuest()).Token, alias);

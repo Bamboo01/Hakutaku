@@ -68,14 +68,20 @@ services:
   docs:
     # The wiki in docs/, live-served rather than built. Reachable only through
     # caddy -- no `ports:` here, so it is not published on the host.
-    image: squidfunk/mkdocs-material
+    # Pinned: this third-party image runs on a public port, so it only changes
+    # when someone bumps the tag on purpose.
+    image: squidfunk/mkdocs-material:9.7.7
     restart: unless-stopped
     command: serve --dev-addr 0.0.0.0:5020
     volumes:
-      # The whole repo, read-only: mkdocs.yml sits at the root, and a
-      # single-file bind mount would pin its inode so edits never appear
-      # (same trap as the Caddyfile mount above).
-      - ./:/docs:ro
+      # Only what the wiki needs, read-only. Not the whole repo: that would
+      # hand .git and any .env with production secrets to this container.
+      # mkdocs.yml is a single-file mount, which pins its inode, so a pulled
+      # change to it only shows once the container is recreated (the
+      # Jenkinsfile does that on every deploy). docs/ is a directory, so page
+      # edits show at once.
+      - ./docs:/docs/docs:ro
+      - ./mkdocs.yml:/docs/mkdocs.yml:ro
 
 volumes:
   pgdata:

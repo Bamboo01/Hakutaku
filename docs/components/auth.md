@@ -392,7 +392,7 @@ settings and the same hash-only token storage. The differences:
 | Token transport | `HttpOnly` cookie | `Authorization: Bearer <token>` header — the callers are game clients, not browsers |
 | Lifetime | 30 min idle + 12 h absolute | one fixed 30 days, no idle timeout |
 | Ways in | username + password | device token (`login/device`) while a guest, then email + password (`login/email`) |
-| Rate limits | `admin-login` | `player-register`, `player-device-login`, `player-login`, `player-link` and `player-mail` (verify, resend, forgot, reset), 5 per minute per IP each. `display-name` is limited per player instead: 5 tries an hour, counted in memory |
+| Rate limits | `admin-login` | `player-register`, `player-device-login`, `player-login`, `player-link` and `player-mail` (verify, resend, forgot, reset), each its own allowance per IP: 5 a minute, except `player-register` (30) and `player-device-login` (60), which every copy of the game calls on launch, so a room behind one IP has to fit. `display-name` is limited per player instead: 5 tries an hour, counted in memory |
 
 How a player gets in:
 
@@ -413,7 +413,11 @@ How a player gets in:
    existence checks run before the Argon2 hash, so the expensive work happens at
    most once per session. The database enforces one email per player and one
    player per email; the handler reads the violated constraint's name to tell
-   the two `409`s apart.
+   the two `409`s apart. An **unverified** link only holds its address for 24
+   hours (`LinkEmail.UnverifiedHold`); after that the next player to link it
+   replaces it, in one transaction. Otherwise a guest could link someone else's
+   address, never verify it, and lock the real owner out for good. A verified
+   link is never replaced.
 4. **`email/verify`** marks the email verified and **deletes the device token**,
    in one transaction. The account is recoverable from then on, so a credential
    that never expires has no reason to stay on one phone. Waiting for

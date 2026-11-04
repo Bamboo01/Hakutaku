@@ -367,7 +367,7 @@ up, so registering the same hardware twice gives two players.
 |---|---|
 | `200` | The new player, its device token and a session |
 | `400` | Missing `hardwareId` or over 254 characters (an old client sending `deviceId` gets this too), or a bad `displayName` |
-| `429` | More than 5 attempts per minute from one IP |
+| `429` | More than 30 per minute from one IP (loose, so a room of players behind one IP can all start at once) |
 
 ### Device login
 
@@ -391,7 +391,7 @@ The device token stops working once the player **verifies** an email (see
 | `200` | The player and a fresh session |
 | `400` | Missing `deviceToken` |
 | `401` | Unknown token, including one removed by email verification |
-| `429` | More than 5 attempts per minute from one IP (its own limit, separate from email login's) |
+| `429` | More than 60 per minute from one IP (its own limit, separate from email login's, and loose so a room behind one IP can all sign in at once) |
 
 ### Set the display name
 
@@ -456,16 +456,19 @@ verified email can reset its password.
 
 !!! note "A taken email gets the same answer as a free one"
     If the email already belongs to another player, you still get `200` with the
-    same body as a real link, and **no code is made** for you. Instead the real
-    owner gets a heads-up email (at most one per address per hour). That way this
-    route can't be used to find out which emails have accounts. The only cost is
-    that a caller who typed someone else's address sees "code sent" and never gets
-    one.
+    same body as a real link, and **no code is made** for you. If that player has
+    verified it, they get a heads-up email (at most one per address per hour). That
+    way this route can't be used to find out which emails have accounts. The only
+    cost is that a caller who typed someone else's address sees "code sent" and
+    never gets one.
 
-!!! warning "An unverified email can still be claimed"
-    Until someone verifies it, an address is only a claim. A player who links
-    someone else's address first holds it, and the real owner's later attempt looks
-    like a normal link but no code arrives. Nothing cleans up unverified claims yet.
+!!! note "An unverified email is only held for 24 hours"
+    Until someone verifies it, an address is only a claim. The player who links it
+    first holds it for **24 hours**; a link by anyone else in that time gets the
+    taken-email answer above, and nobody is mailed a warning. After that, the next
+    player to link the address replaces the old claim and gets the code, and the
+    old player is left with no email linked. A **verified** email is never
+    replaced.
 
 ### Verify an email
 

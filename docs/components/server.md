@@ -70,7 +70,11 @@ o.AddPolicy("admin-login", context => RateLimitPartition.GetFixedWindowLimiter(
 ```
 
 Five login attempts per minute per IP, fixed window. Applied to one endpoint
-only, with `.RequireRateLimiting("admin-login")`.
+only, with `.RequireRateLimiting("admin-login")`. The player routes get their
+own policies made the same way (`Hosting/RateLimiting.cs`). Most allow 5 a
+minute too, but `player-register` allows 30 and `player-device-login` 60, since
+every copy of the game calls them on launch and a room of players can share one
+IP.
 
 !!! note "The 429 has no body"
     Unlike the hand-written `400`/`401`/`403` responses, which return

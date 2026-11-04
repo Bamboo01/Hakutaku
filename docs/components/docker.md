@@ -160,21 +160,27 @@ Material image:
 
 ```yaml
 docs:
-  image: squidfunk/mkdocs-material
+  image: squidfunk/mkdocs-material:9.7.7
   command: serve --dev-addr 0.0.0.0:5020
   volumes:
-    - ./:/docs:ro
+    - ./docs:/docs/docs:ro
+    - ./mkdocs.yml:/docs/mkdocs.yml:ro
 ```
 
 Note what is *not* there: **no `ports:` entry.** The container is reachable only
 through Caddy, which proxies the `docs.` subdomain to it. Nothing is published
 on the host.
 
-It mounts the **whole repo**, read-only, for the same inode reason as the
-Caddyfile — `mkdocs.yml` sits at the repo root, and a single-file bind mount
-would pin it so edits never appeared. The cost is that `.env` is visible inside
-that container; the dev server only ever serves generated documentation, never
-arbitrary files, so nothing is exposed over HTTP by it.
+It mounts **only `docs/` and `mkdocs.yml`**, read-only, and never the whole
+repo. A whole-repo mount would hand `.git` and any `.env` (production secrets)
+to a third-party image on a public port. The image is **pinned** for the same
+reason, so it only changes when someone bumps the tag on purpose.
+
+`mkdocs.yml` is a single-file mount, which pins its inode (the same trap as the
+Caddyfile), so a pulled change to it only shows once the container is recreated.
+The Jenkinsfile recreates `docs` on every deploy. Locally, run
+`docker compose -f compose.dev.yaml up -d --force-recreate docs`. Pages under
+`docs/` are a directory mount, so their edits show at once.
 
 !!! note "The docs are served, not built"
     There is no `mkdocs build` step and no `site/` directory in the image. A push

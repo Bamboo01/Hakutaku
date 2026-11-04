@@ -28,14 +28,14 @@ namespace server.Hosting
 
                 // every policy is the same rule: so many requests per client ip per window. they're separate
                 // policies so each group of routes gets its own allowance (see RateLimits)
-                void AddPerIpPolicy(string name) => o.AddPolicy(name, context => RateLimitPartition.GetFixedWindowLimiter(
+                void AddPerIpPolicy(string name, int permitLimit = RateLimits.PermitLimit) => o.AddPolicy(name, context => RateLimitPartition.GetFixedWindowLimiter(
                     context.Connection.RemoteIpAddress?.ToString() ?? RateLimits.UnknownClient,
-                    _ => new FixedWindowRateLimiterOptions { PermitLimit = RateLimits.PermitLimit, Window = RateLimits.Window }));
+                    _ => new FixedWindowRateLimiterOptions { PermitLimit = permitLimit, Window = RateLimits.Window }));
 
                 AddPerIpPolicy(RateLimits.AdminLogin);
-                AddPerIpPolicy(RateLimits.PlayerRegister);
+                AddPerIpPolicy(RateLimits.PlayerRegister, RateLimits.RegisterPermitLimit);
                 AddPerIpPolicy(RateLimits.PlayerLogin);
-                AddPerIpPolicy(RateLimits.PlayerDeviceLogin);
+                AddPerIpPolicy(RateLimits.PlayerDeviceLogin, RateLimits.DeviceLoginPermitLimit);
                 AddPerIpPolicy(RateLimits.PlayerMail);
                 AddPerIpPolicy(RateLimits.PlayerLink);
             });
