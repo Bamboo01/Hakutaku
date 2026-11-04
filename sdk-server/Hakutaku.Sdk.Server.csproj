@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The game server's SDK: validates a player's session ticket and reads and writes their data with
+       a server key. Same rules as sdk/: netstandard2.1 and C# 9 so Unity can compile it, no file-scoped
+       namespaces, records, init, required or global usings, and #nullable enable per file. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <RootNamespace>Hakutaku</RootNamespace>
+    <!-- makes the shared types in HakutakuError.cs internal here, so a Unity project that references
+         this and the client SDK has one public copy of each (two would be CS0433) -->
+    <DefineConstants>$(DefineConstants);HAKUTAKU_SERVER_SDK</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- linked from the client SDK, not copied, so there's one copy of the HTTP code, the error
+         mapping and the server's routes and JSON shapes. All internal in both assemblies -->
+    <Compile Include="../sdk/HakutakuHttp.cs" Link="Shared/HakutakuHttp.cs" />
+    <Compile Include="../sdk/HakutakuError.cs" Link="Shared/HakutakuError.cs" />
+    <Compile Include="../sdk/ServerContract.cs" Link="Shared/ServerContract.cs" />
+  </ItemGroup>
+
+</Project>

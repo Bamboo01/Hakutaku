@@ -90,6 +90,19 @@ player (`PlayerDataChecks.cs`):
 | Remove those 100 keys again | none left |
 | An unknown player, read and write | `404` each |
 
+Then, with the same key, the probe plays a game server's authenticator through
+the **server SDK** (`ServerSdkChecks.cs`, using `sdk-server/` as a game server
+would):
+
+| Step | Expected |
+|---|---|
+| A fresh mock player registers through the client SDK, and `AuthenticateSessionTicket` validates its ticket | the same player id |
+| `AuthenticateSessionTicket` with a made-up ticket | `InvalidSessionTicket`, not unavailable |
+| The real ticket with a wrong server key | `ServerKeyRejected`, never the ticket's fault |
+| `UpdateUserReadOnlyData` `Xp` = 1200, then `GetUserReadOnlyData` `Xp,NotSet` | updated 1, then `Xp` = 1200 and no `NotSet` |
+| A local socket that accepts and never answers, with a 1-second timeout | `Timeout`, and `IsHakutakuUnavailable` |
+| A port with nothing listening | `ConnectionError`, and `IsHakutakuUnavailable` |
+
 The probe revokes every key it made, so it leaves nothing usable behind. It does
 leave the (revoked) rows, since no route deletes a key. It removes the `Xp` and
 the 100 keys it wrote, so the mock player is left with no data.
@@ -173,6 +186,9 @@ You can, with two things to know:
 | `Program.cs` | Argument parsing, and the dispatch to `probe` or `shell` |
 | `MockPlayer.cs` | One mock player: its own `HakutakuClientInstanceAPI` (so its own session), a made-up hardware ID, its device token, and email and password once linked |
 | `Probe.cs` | The scripted run, the `AccessChecks` table, the `429` retry |
+| `ServerKeyChecks.cs` | With the owner's password: makes, uses, revokes and expires server keys, then hands a fresh key to the two below |
+| `PlayerDataChecks.cs` | The player data routes over plain HTTP, as a game server |
+| `ServerSdkChecks.cs` | The same job through the server SDK (`sdk-server/`): validate a ticket, write and read `Xp`, and the error split |
 | `Report.cs` | Prints each check as `ok` / `FAIL` and keeps the tally |
 | `Shell.cs` | The interactive commands |
 

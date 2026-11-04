@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\sdk\Hakutaku.Sdk.csproj" />
+    <ProjectReference Include="..\sdk-server\Hakutaku.Sdk.Server.csproj" />
   </ItemGroup>
 
 </Project>

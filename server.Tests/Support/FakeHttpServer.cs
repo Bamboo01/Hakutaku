@@ -30,6 +30,14 @@ namespace server.Tests.Support
         // how many requests have reached it, so a test can check one was never even sent
         public int Requests;
 
+        // stands in for Hakutaku's /api/server/* routes, for the server SDK's tests. a test sets what it
+        // answers. by default it's a 404, like an unknown route
+        public Func<HttpContext, Task<IResult>> GameServerRoutes { get; set; } =
+            _ => Task.FromResult(Results.Json(new { error = "route not found" }, statusCode: 404));
+
+        // the last request that reached GameServerRoutes: method, path with query, X-Server-Key and body
+        public (string Method, string PathAndQuery, string ServerKey, string Body)? LastGameServerRequest;
+
         FakeHttpServer(WebApplication app, string url)
         {
             this.app = app;
@@ -85,6 +93,13 @@ namespace server.Tests.Support
                 {
                 }
                 return Results.Json(new { value = "late" });
+            });
+
+            app.Map("/api/server/{**rest}", async (HttpContext c) =>
+            {
+                var body = await new StreamReader(c.Request.Body).ReadToEndAsync();
+                self!.LastGameServerRequest = (c.Request.Method, c.Request.Path + c.Request.QueryString, c.Request.Headers["X-Server-Key"].ToString(), body);
+                return await self.GameServerRoutes(c);
             });
 
             await app.StartAsync();

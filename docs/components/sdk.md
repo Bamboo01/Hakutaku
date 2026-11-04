@@ -195,11 +195,74 @@ line.** If you forget, the build warns on the file's first `?`.
 - Either copy the `.cs` files into the Unity project, or build the DLL
   (`dotnet build -c Release`) and drop it in `Assets/Plugins`.
 
+## The server SDK
+
+`sdk-server/` (`Hakutaku.Sdk.Server`) is a second assembly for the **game
+server**. It authenticates with a server key (see
+[Auth and sessions](auth.md#server-keys)), never a player token. It's what a
+Mirror authenticator calls when a player joins:
+
+```csharp
+var server = new HakutakuServerInstanceAPI(url, Environment.GetEnvironmentVariable("HAKUTAKU_SERVER_KEY"));
+
+var who = await server.AuthenticateSessionTicketAsync(new AuthenticateSessionTicketRequest { SessionTicket = ticket });
+if (who.Error != null)
+{
+    if (who.Error.Error == HakutakuServerErrorCode.InvalidSessionTicket) { /* turn the player away */ }
+    else if (who.Error.IsHakutakuUnavailable) { /* Hakutaku is down or slow: let them in offline */ }
+    else { /* a setup problem on this game server, e.g. ServerKeyRejected */ }
+    return;
+}
+
+var data = await server.GetUserReadOnlyDataAsync(new GetUserDataRequest { PlayerId = who.Result!.PlayerId, Keys = new List<string> { "Xp" } });
+long xp = data.Result != null && data.Result.Data.TryGetValue("Xp", out var s) && long.TryParse(s, out var v) ? v : 0;
+```
+
+| Call | Route |
+|---|---|
+| `AuthenticateSessionTicket` | `POST /api/server/sessions/validate`, which gives the player's id and display name |
+| `GetUserReadOnlyData` | `GET /api/server/players/{id}/data?tier=ReadOnly`. No `Keys` means every key, and a key never set is left out |
+| `UpdateUserReadOnlyData` | `POST` to the same path. Sets values and never adds to them, so a retry is harmless; at most 10 changes a call |
+
+Each comes in `Async` and callback forms, like the client SDK, and returns a
+`HakutakuServerResult<T>` instead of throwing. The key is a constructor
+argument, which the game server reads from its own environment, never from a
+build. The constructor also takes a timeout per call (10 seconds by default,
+30 at most), since a joining player waits on the validate call.
+
+**The error split.** `HakutakuServerErrorCode` keeps apart the cases the
+authenticator decides on:
+
+| Code | Meaning | What the game does |
+|---|---|---|
+| `InvalidSessionTicket` | A `401` carrying `invalid_ticket`: the ticket is unknown, revoked or expired | Turn the player away |
+| `Timeout`, `ConnectionError`, `InternalServerError`, `ServiceUnavailable` | No answer in time, no answer at all, or a `5xx`. `IsHakutakuUnavailable` is true for all of them | Let the player in offline, if the game allows it |
+| `ServerKeyRejected` | A `401` without that code: this game server's own key was refused | Fix the setup. It's never the player's fault |
+| `MissingServerKey` | No key was given, so nothing was sent | Set `HAKUTAKU_SERVER_KEY` |
+
+**How it shares code with the client SDK.** The project compiles
+`HakutakuHttp.cs`, `HakutakuError.cs` and `ServerContract.cs` from `sdk/` as
+linked files, not copies, so there is one copy of the HTTP code and of the
+routes. It defines `HAKUTAKU_SERVER_SDK`, which makes the client's
+`HakutakuError`, `HakutakuErrorCode` and `HakutakuResult<T>` internal there. The
+server SDK's public types are all named `HakutakuServer…`. A Unity project that
+references both DLLs therefore has one public copy of every type and no
+`CS0433`. The test project and the simulator both reference both SDKs, so the
+build checks this.
+
+The same Unity rules apply as for `sdk/`: `netstandard2.1`, C# 9, Newtonsoft,
+and `#nullable enable` at the top of every file.
+
+!!! warning "The game server can only reach Hakutaku through the tunnel for now"
+    Caddy doesn't proxy `/api/server/*` yet, so on the public domain these calls
+    get a `404` (`NotFound`). A game server outside the VM needs the SSH tunnel
+    until a `handle` block is added for those routes.
+
 ## Still open
 
 | Question | Notes |
 |---|---|
-| **Game servers** | This is a *client* SDK and only knows player tokens. The server-key path now exists (see [Auth and sessions](auth.md#server-keys)), but there is no SDK for it yet and `/api/server` only has `ping`; see [Telemetry ingestion](ingestion.md). |
+| **Game servers on the public domain** | The server SDK exists (see above), but Caddy doesn't proxy `/api/server/*` yet, so a game server has to use the SSH tunnel. |
 | **Retries and caching** | None. Calls pass straight through, and a `429` is returned to the caller. The simulator does its own retrying. |
 | **Packaging** | Source or DLL by hand for now. A Unity package (UPM) is the likely end state. |
 

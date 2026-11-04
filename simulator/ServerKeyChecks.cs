@@ -10,8 +10,9 @@
         route. It revokes every key it made when it is done.
 
         Run from Probe.cs when an owner password is given, and hands its
-        fresh key to PlayerDataChecks.cs. There is no SDK call for any of
-        this, so it uses plain HTTP with a cookie jar.
+        fresh key to PlayerDataChecks.cs and ServerSdkChecks.cs. Making and
+        revoking keys is an admin job with no SDK call, so it uses plain
+        HTTP with a cookie jar.
 **************************************************************************/
 using System.Net;
 using System.Text.Json;
@@ -59,6 +60,9 @@ namespace simulator
                 Report.Note("No mock player to test player data with.");
             else
                 await PlayerDataChecks.RunAsync(anonymous, fresh.Value.Key, playerId, report);
+
+            // and the same key through the server SDK, the way a game server uses it
+            await ServerSdkChecks.RunAsync(url, fresh.Value.Key, report);
 
             // revoking one: it works, then it doesn't
             var toRevoke = await MakeKey(owner, report, "sim-probe-revoked", null, madeIds);
