@@ -350,6 +350,43 @@ One-way. No restore endpoint, because nobody needed one.
 - **Bearer equivalence.** Anyone holding the cookie is the admin. There is no
   second factor, which is what `totp_secret` was reserved for.
 
+## Server keys
+
+A game server uses a **server key**, which is a third kind of credential next to
+the admin cookie and the player token. It is sent in the `X-Server-Key` header and
+opens the `/api/server/*` routes only.
+
+- **Made by the owner.** `POST /api/admin/server-keys` (owner only, the same
+  `RequireOwner` check as `CreateAdmin`) makes 32 random bytes, base64url. It is
+  returned once. Only its SHA-256 is stored, in `server_keys.key_sha256`, so a
+  copy of the database can't be used as a server key, like session tokens.
+- **Checked by a filter.** `.RequireServerKey()` (`Auth/ServerKeyGuards.cs`) adds
+  `RequireServerKeyFilter`. It hashes the header and looks up a key with that
+  hash that isn't revoked or expired. That is an indexed lookup by hash, which is
+  fine for the same reason session lookups are: the key is 256 random bits, so
+  there is nothing to guess and no timing to leak.
+- **Refused by default.** A missing, unknown, revoked or expired key gets
+  `401 {error}`, so with no keys in the table every server route is refused. So
+  does one over 512 characters (`Limits.ServerKeyMaxLength`), which can't be a
+  real 43-character key and isn't hashed.
+- **Bookkeeping.** `last_used_at` is written at most once a minute per key. The
+  lookup also reads `last_used_at`, so a key used under a minute ago costs one
+  query and no write. Otherwise one conditional `UPDATE` repeats the check, so
+  two calls at once can't both write. The key's id is left on the request
+  (`HttpContext.Items["ServerKeyId"]`) for handlers and logs. When a server call
+  fails with a `500`, the exception handler (`Hosting/ApiErrors.cs`) logs
+  `Server key {id} made the request that failed`, under the `GameServer`
+  category, right after the exception itself.
+- **Kept apart from the admin routes.** Admin routes read the cookie and nothing
+  else, so a server key never works on `/api/admin/*`. In the same way, an admin
+  cookie or a player token doesn't open `/api/server/*`.
+- **Revoking** sets `revoked_at` and takes effect on the next call. It is one-way.
+
+The filter sits on the whole `/api/server` group (`Endpoints/GameServer/`), so a
+route added to that group is protected without anyone remembering to do it. Today
+that group has `ping` and the player data routes (`GET` and `POST
+/api/server/players/{id}/data`).
+
 ## Player auth
 
 The player routes are in `server/Endpoints/PlayerAuth/`, and their helpers in `server/Services/`. They reuse the shared helpers (`PasswordHasher.Hash`, `PasswordHasher.Verify`,
@@ -361,7 +398,7 @@ settings and the same hash-only token storage. The differences:
 | Token transport | `HttpOnly` cookie | `Authorization: Bearer <token>` header — the callers are game clients, not browsers |
 | Lifetime | 30 min idle + 12 h absolute | one fixed 30 days, no idle timeout |
 | Ways in | username + password | device token (`login/device`) while a guest, then email + password (`login/email`) |
-| Rate limits | `admin-login` | `player-register`, `player-device-login`, `player-login`, `player-link` and `player-mail` (verify, resend, forgot, reset), 5 per minute per IP each |
+| Rate limits | `admin-login` | `player-register`, `player-device-login`, `player-login`, `player-link` and `player-mail` (verify, resend, forgot, reset), each its own allowance per IP: 5 a minute, except `player-register` (30) and `player-device-login` (60), which every copy of the game calls on launch, so a room behind one IP has to fit. `display-name` is limited per player instead: 5 tries an hour, counted in memory |
 
 How a player gets in:
 
@@ -382,7 +419,11 @@ How a player gets in:
    existence checks run before the Argon2 hash, so the expensive work happens at
    most once per session. The database enforces one email per player and one
    player per email; the handler reads the violated constraint's name to tell
-   the two `409`s apart.
+   the two `409`s apart. An **unverified** link only holds its address for 24
+   hours (`LinkEmail.UnverifiedHold`); after that the next player to link it
+   replaces it, in one transaction. Otherwise a guest could link someone else's
+   address, never verify it, and lock the real owner out for good. A verified
+   link is never replaced.
 4. **`email/verify`** marks the email verified and **deletes the device token**,
    in one transaction. The account is recoverable from then on, so a credential
    that never expires has no reason to stay on one phone. Waiting for
@@ -403,7 +444,10 @@ a `purpose` of verify or reset):
 
 - A code is **6 digits**, lives **15 minutes**, works **once**, and dies after
   **5 wrong guesses**. A new code retires the older one, and a player can only be
-  mailed one per purpose per minute.
+  mailed one per purpose per minute and **5 per purpose per 24 hours**. The daily
+  count comes from the `player_email_codes` rows themselves, since old codes are
+  marked used and never deleted. `forgot` stays silent past either limit (so it
+  can't give an account away), and `resend` says which limit it hit.
 - Only a SHA-256 of the code (tied to the player and purpose) is stored.
 - **Six digits are weak on their own**, so the guess cap does the real work.
   `RedeemCode` counts the attempt in the database *before* comparing, so parallel

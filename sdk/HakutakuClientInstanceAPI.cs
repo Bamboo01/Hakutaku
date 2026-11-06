@@ -112,7 +112,7 @@ namespace Hakutaku
         // returns the response body as text. The simulator uses it to check that admin
         // routes turn a player token away; a game shouldn't need it.
         public Task<HakutakuResult<string>> SendRawRequestAsync(string method, string path, string? jsonBody = null) =>
-            HakutakuHttp.SendRawAsync(apiSettings, method, path, jsonBody, authenticationContext.SessionTicket);
+            HakutakuHttp.SendRawAsync(apiSettings.ServerUrl, method, path, jsonBody, authenticationContext.SessionTicket);
 
         // ---- Callback versions ----------------------------------------------------------
 
@@ -171,7 +171,7 @@ namespace Hakutaku
         {
             if (needsSession && !IsClientLoggedIn())
                 return Task.FromResult(HakutakuHttp.Fail<TWire>(path, HakutakuErrorCode.NotLoggedIn, "must be logged in to call this method"));
-            return HakutakuHttp.SendAsync<TWire>(apiSettings, method, path, body, needsSession ? authenticationContext.SessionTicket : null);
+            return HakutakuHttp.SendAsync<TWire>(apiSettings.ServerUrl, method, path, body, needsSession ? authenticationContext.SessionTicket : null);
         }
 
         static HakutakuResult<TResult> Map<TWire, TResult>(HakutakuResult<TWire> wire, Func<TWire, TResult> map)
@@ -192,7 +192,6 @@ namespace Hakutaku
                 DisplayName = session.DisplayName,
                 SessionTicket = session.Token ?? "",
                 SessionExpiration = session.ExpiresAt,
-                Xp = session.Xp,
                 DeviceToken = session.DeviceToken,
             };
         }

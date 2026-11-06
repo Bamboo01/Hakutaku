@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 
 namespace Hakutaku
 {
@@ -21,6 +22,19 @@ namespace Hakutaku
         public const string ResetPassword = "/api/players/password/reset";
         public const string Events = "/api/events";
         public const string Characters = "/api/characters";
+
+        // The game server's routes, called by the server SDK (sdk-server/), which compiles this file in
+        // too. They need a server key, never a session.
+        public const string ValidateSession = "/api/server/sessions/validate";
+        public static string PlayerData(string playerId, string tier) =>
+            "/api/server/players/" + Uri.EscapeDataString(playerId) + "/data?tier=" + tier;
+    }
+
+    // The code the validate route sends with a 401 for a bad ticket. A 401 without it means the
+    // server key itself was refused.
+    static class ServerCodes
+    {
+        public const string InvalidTicket = "invalid_ticket";
     }
 
     // What register and both logins answer with. DeviceToken comes only from register.
@@ -28,7 +42,6 @@ namespace Hakutaku
     {
         public string? Id { get; set; }
         public string? DisplayName { get; set; }
-        public int Xp { get; set; }
         public string? DeviceToken { get; set; }
         public string? Token { get; set; }
         public DateTime ExpiresAt { get; set; }
@@ -75,8 +88,21 @@ namespace Hakutaku
         public string? Name { get; set; }
     }
 
-    class ErrorWire
+    // ---- The game server's routes (server SDK only)
+
+    class ValidateSessionWire
     {
-        public string? Error { get; set; }
+        public string? PlayerId { get; set; }
+        public string? DisplayName { get; set; }
+    }
+
+    class PlayerDataWire
+    {
+        public Dictionary<string, string>? Data { get; set; }
+    }
+
+    class PlayerDataUpdatedWire
+    {
+        public int Updated { get; set; }
     }
 }

@@ -9,9 +9,11 @@
         happened with what was expected. The run exits with 1 on any
         surprise.
 
-        Started from Program.cs. Uses MockPlayer and Report. AccessChecks
-        lists every non-player route and what a player token should get, so
-        update it when a route opens to players.
+        Started from Program.cs. Uses MockPlayer and Report, and
+        ServerKeyChecks (which runs PlayerDataChecks) when it is given the
+        owner's password, and GivenKeyChecks when it is given server keys.
+        AccessChecks lists every non-player route and what a player token
+        should get, so update it when a route opens to players.
 **************************************************************************/
 using Hakutaku;
 using Hakutaku.ClientModels;
@@ -25,6 +27,7 @@ namespace simulator
         Unauthorized,
         Forbidden,
         Conflict,
+        TooManyRequests,
         // 401 or 403, which is what the admin gate answers locally or through the tunnel.
         // Against any other host 404 counts too, since that's Caddy's answer on the public
         // domain for a route that isn't public (see Report).
@@ -50,13 +53,22 @@ namespace simulator
             ("GrantCharacterToUser   POST /api/characters", Expect.Denied, async c => (await c.GrantCharacterToUserAsync(new GrantCharacterToUserRequest { CharacterName = "sim" })).Error),
             // No SDK method for these: no game client should ever call them.
             ("raw                    GET /api/players", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/players")).Error),
-            ("raw                    POST /api/players", Expect.Denied, async c => (await c.SendRawRequestAsync("POST", "/api/players", """{"xp":0}""")).Error),
+            ("raw                    POST /api/players", Expect.Denied, async c => (await c.SendRawRequestAsync("POST", "/api/players", """{}""")).Error),
             ("raw                    GET /api/events", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/events")).Error),
             ("raw                    GET /api/admin/me", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/admin/me")).Error),
             ("raw                    GET /api/admin/admins", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/admin/admins")).Error),
+            ("raw                    GET /api/admin/server-keys", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/admin/server-keys")).Error),
+            ("raw                    POST /api/admin/server-keys", Expect.Denied, async c => (await c.SendRawRequestAsync("POST", "/api/admin/server-keys", """{"name":"sim"}""")).Error),
+            // A player token isn't a server key, so the server routes refuse it too.
+            ("raw                    GET /api/server/ping", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/server/ping")).Error),
+            // Nor can a player validate tickets: the ticket check is the game server's, behind its key.
+            ("raw                    POST /api/server/sessions/validate", Expect.Denied, async c => (await c.SendRawRequestAsync("POST", "/api/server/sessions/validate", $$"""{"ticket":"{{c.authenticationContext.SessionTicket}}"}""")).Error),
+            // Even a player's own id and token don't open their own data: that takes a server key.
+            ("raw                    GET /api/server/players/{id}/data", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", $"/api/server/players/{c.authenticationContext.PlayerId}/data?tier=ReadOnly")).Error),
+            ("raw                    POST /api/server/players/{id}/data", Expect.Denied, async c => (await c.SendRawRequestAsync("POST", $"/api/server/players/{c.authenticationContext.PlayerId}/data?tier=ReadOnly", """{"data":{"Xp":"999999"}}""")).Error),
         ];
 
-        public static async Task<int> RunAsync(string url, int playerCount)
+        public static async Task<int> RunAsync(string url, int playerCount, string? adminPassword = null, GivenKeys? givenKeys = null)
         {
             var report = new Report(url);
 
@@ -93,6 +105,16 @@ namespace simulator
                     await RunAccessChecks(player, report);
             }
 
+            // Needs the owner's session, which no player has, so it only runs when given the password.
+            if (adminPassword is null)
+                Report.Note("Server key checks skipped. Give the owner's password (--admin-password, or HAKUTAKU_ADMIN_PASSWORD) to run them.");
+            else
+                await ServerKeyChecks.RunAsync(url, adminPassword, players.FirstOrDefault()?.PlayerId, report);
+
+            // for production, where the probe can't make keys: keys made on the keys page and handed in
+            if (givenKeys is { Any: true })
+                await GivenKeyChecks.RunAsync(url, givenKeys, report);
+
             report.PrintSummary();
             return report.Failed == 0 ? 0 : 1;
         }
@@ -128,7 +150,8 @@ namespace simulator
             var oldClient = await RetryIfLimited(() => stranger.SendRawRequestAsync("POST", "/api/players/register", """{"deviceId":"old-client-device-id"}"""));
             report.Check("stranger", "raw POST /api/players/register (old deviceId body)", Expect.BadRequest, oldClient.Error);
 
-            // Stored trimmed. Not rate limited, so these cost nothing against the limits.
+            // Stored trimmed. display-name is limited per player (see below), not per IP, so these
+            // cost nothing against the per-IP limits.
             const string newName = "Sir Simulator";
             var rename = await c.UpdateUserTitleDisplayNameAsync(new UpdateUserTitleDisplayNameRequest { DisplayName = $"  {newName}  " });
             report.Check(player.Name, "UpdateUserTitleDisplayName", Expect.Ok, rename.Error, rename.Result?.DisplayName);
@@ -150,6 +173,14 @@ namespace simulator
                 var refused = await c.UpdateUserTitleDisplayNameAsync(new UpdateUserTitleDisplayNameRequest { DisplayName = bad });
                 report.Check(player.Name, $"UpdateUserTitleDisplayName ({label})", Expect.BadRequest, refused.Error);
             }
+
+            // Limited per player: 5 tries an hour, and every try with a valid token counts, refused names
+            // included. The rename and the three refused names used four, so the 5th goes through and the
+            // 6th is turned away.
+            var fifth = await c.UpdateUserTitleDisplayNameAsync(new UpdateUserTitleDisplayNameRequest { DisplayName = newName });
+            report.Check(player.Name, "UpdateUserTitleDisplayName (5th this hour)", Expect.Ok, fifth.Error);
+            var sixth = await c.UpdateUserTitleDisplayNameAsync(new UpdateUserTitleDisplayNameRequest { DisplayName = newName });
+            report.Check(player.Name, "UpdateUserTitleDisplayName (6th this hour)", Expect.TooManyRequests, sixth.Error);
 
             player.Email = MockPlayer.NewEmail();
             player.Password = MockPlayer.NewPassword();

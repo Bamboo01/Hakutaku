@@ -4,10 +4,12 @@
 \par    choi.m@digipen.edu
 \date   25th October 2026
 \brief  This file defines PlayerSessionService, which makes a player session
-        at sign-in and finds the player from a Bearer token. Sessions last
-        30 days, and only the hash of the token is stored.
+        at sign-in and finds the player from a Bearer token or a session
+        ticket. Sessions last 30 days, and only the hash of the token is
+        stored.
 
-        Used by the player auth handlers. Stores PlayerSession rows.
+        Used by the player auth handlers and by ValidateSession.cs. Stores
+        PlayerSession rows.
 **************************************************************************/
 using System.Buffers.Text;
 using System.Security.Cryptography;
@@ -60,6 +62,13 @@ namespace server.Services
             var token = header[prefix.Length..].Trim();
             if (token.Length == 0) return null;
 
+            return await FindByToken(token);
+        }
+
+        // the player a token belongs to, or null if it's unknown, revoked or expired. a game server's
+        // session ticket is the same token, so it goes through here too and gets exactly the same rules
+        public async Task<Player?> FindByToken(string token)
+        {
             var hash = TokenHasher.Hash(token);
             var now = time.UtcNow();
             return await db.PlayerSessions

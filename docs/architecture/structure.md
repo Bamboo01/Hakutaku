@@ -6,7 +6,7 @@
 Hakutaku/
 ├── server/                  ASP.NET Core 10 API (also serves the built UI)
 │   ├── Program.cs           Entry point: DI, middleware, and the Map…Routes() calls
-│   ├── Auth/                Password and token hashing, admin sessions, the RequireAdmin/RequireOwner guards
+│   ├── Auth/                Password and token hashing, admin sessions, the RequireAdmin/RequireOwner guards, the RequireServerKey filter
 │   ├── SEmail/              IEmailSender: real SMTP, or log-only when none is set
 │   ├── Endpoints/           One folder per route group: a routes file + one handler per route
 │   ├── Services/            Injected services the player routes share (sessions, identities, codes) plus the pure input rules
@@ -14,9 +14,9 @@ Hakutaku/
 │   ├── Hosting/             Startup pieces: service registration, rate limits, the owner account, the JSON 404 and 500 handlers
 │   ├── Models/
 │   │   ├── Db.cs            The DbContext and the table mappings
-│   │   ├── Admin/           AdminUser, AdminSession, AdminRole
+│   │   ├── Admin/           AdminUser, AdminSession, AdminRole, ServerKey
 │   │   └── Players/         Player, Character, TelemetryEvent, PlayerIdentity, PlayerSession, ...
-│   ├── Migrations/          EF Core migration history (10 so far)
+│   ├── Migrations/          EF Core migration history (13 so far)
 │   ├── appsettings.json             Base config
 │   └── appsettings.Development.json Dev connection string (host, not Docker)
 │
@@ -37,6 +37,7 @@ Hakutaku/
 ├── Jenkinsfile              Deploy + smoke test on merge to master
 ├── docs/                    This wiki
 │
+├── server.Tests/            xUnit tests for the server: unit tests, and integration tests against a real Postgres
 ├── sdk/                     PlayFab-style C# client library (netstandard2.1, for Unity)
 └── simulator/               .NET console app: mock players, through the SDK
 ```
@@ -150,8 +151,8 @@ frontend.
 
 Worth knowing so you do not go looking:
 
-- **No test suite**, in either `server/` or `web/`. The Jenkins pipeline has no
-  test stage because there is nothing to run.
+- **Tests only for the server** (`server.Tests/`). `web/` has none, and the
+  Jenkins pipeline has no test stage, so nothing runs them before a deploy.
 - **No player-facing auth.** `/api/players`, `/api/characters` and `/api/events`
   are gated behind *admin* login as a stopgap. They are meant to be public
   eventually — see [Practices](practices.md).

@@ -67,9 +67,12 @@ This is the blocker, and it is not small.
 cookies are minted by a human typing a password, expire after 12 hours, and
 carry admin privileges across the whole API.
 
-So ingestion needs a **server-key path**: a credential issued per game server,
-scoped to writing events and nothing else. The planning documents mention a
-`server_keys` table; no schema for it exists.
+So ingestion needs a **server-key path**: a credential issued per game server.
+That now exists: the owner makes keys (`server_keys`, `POST /api/admin/server-keys`)
+and `.RequireServerKey()` guards the `/api/server/*` routes, see
+[Auth and sessions](auth.md#server-keys). A key isn't scoped to one job, though:
+it opens every route in that group. What is still missing is a route under
+`/api/server` that accepts events.
 
 ### 3. A public route
 

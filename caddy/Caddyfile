@@ -9,8 +9,8 @@
 
 	# The public player-auth routes (server/Endpoints/PlayerAuth/). register and both logins
 	# are unauthenticated and rate-limited on the app side; link/email needs a player
-	# session token. Everything else under /api stays tunnel-only until the rest
-	# of the player API exists (see TODO.md item 2).
+	# session token. Everything else under /api, apart from /api/server/* below,
+	# stays tunnel-only until the rest of the player API exists (see TODO.md item 2).
 	handle /api/players/register {
 		reverse_proxy app:8080
 	}
@@ -39,6 +39,14 @@
 		reverse_proxy app:8080
 	}
 	handle /api/players/password/reset {
+		reverse_proxy app:8080
+	}
+
+	# The game server's routes (server/Endpoints/GameServer/): session validate and
+	# player data. Public because the game server reaches Hakutaku over the internet
+	# from a homelab. Every route in that group needs a server key (X-Server-Key),
+	# checked on the whole group in the app, so the key is the protection here.
+	handle /api/server/* {
 		reverse_proxy app:8080
 	}
 

@@ -27,6 +27,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=api /out .
 COPY --from=web /web/dist ./wwwroot
+# run as the non-root "app" user that the base image already has, instead of root. 8080 is above 1024 so
+# it doesn't need root to listen
+USER $APP_UID
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Hakutaku.Server.dll"]
 ```
@@ -42,6 +45,16 @@ Stage 3 is also where **the UI and API become one process**: the Vue build
 output lands in `wwwroot`, which ASP.NET serves as static files. That is the
 single-origin setup the session cookie depends on — see
 [Communication](../architecture/communication.md).
+
+### Why the app doesn't run as root
+
+Containers run as `root` unless told otherwise. If something in the app were
+ever exploited, the attacker would then have root inside the container, which
+makes escaping it easier. The ASP.NET base image ships a low-permission `app`
+user (its id is in `$APP_UID`), so stage 3 switches to it with `USER`. Port 8080
+is above 1024, so listening on it needs no extra rights, and in testing nothing
+needed write access to disk, so nothing else had to change. You can check it with
+`docker run --rm --entrypoint id <image>`, which should print `uid=1654(app)`.
 
 ### Why `package*.json` is copied before the rest
 
@@ -147,21 +160,27 @@ Material image:
 
 ```yaml
 docs:
-  image: squidfunk/mkdocs-material
+  image: squidfunk/mkdocs-material:9.7.7
   command: serve --dev-addr 0.0.0.0:5020
   volumes:
-    - ./:/docs:ro
+    - ./docs:/docs/docs:ro
+    - ./mkdocs.yml:/docs/mkdocs.yml:ro
 ```
 
 Note what is *not* there: **no `ports:` entry.** The container is reachable only
 through Caddy, which proxies the `docs.` subdomain to it. Nothing is published
 on the host.
 
-It mounts the **whole repo**, read-only, for the same inode reason as the
-Caddyfile — `mkdocs.yml` sits at the repo root, and a single-file bind mount
-would pin it so edits never appeared. The cost is that `.env` is visible inside
-that container; the dev server only ever serves generated documentation, never
-arbitrary files, so nothing is exposed over HTTP by it.
+It mounts **only `docs/` and `mkdocs.yml`**, read-only, and never the whole
+repo. A whole-repo mount would hand `.git` and any `.env` (production secrets)
+to a third-party image on a public port. The image is **pinned** for the same
+reason, so it only changes when someone bumps the tag on purpose.
+
+`mkdocs.yml` is a single-file mount, which pins its inode (the same trap as the
+Caddyfile), so a pulled change to it only shows once the container is recreated.
+The Jenkinsfile recreates `docs` on every deploy. Locally, run
+`docker compose -f compose.dev.yaml up -d --force-recreate docs`. Pages under
+`docs/` are a directory mount, so their edits show at once.
 
 !!! note "The docs are served, not built"
     There is no `mkdocs build` step and no `site/` directory in the image. A push

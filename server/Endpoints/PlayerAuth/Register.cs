@@ -53,7 +53,7 @@ namespace server.Endpoints.PlayerAuth
             // can't leave a guest behind whose device token was never handed out
             var (token, expiresAt) = sessions.AddSession(player.Id);
             await db.SaveChangesAsync();
-            return Results.Ok(new { id = player.Id, displayName = player.DisplayName, xp = player.Xp, deviceToken, token, expiresAt });
+            return Results.Ok(new { id = player.Id, displayName = player.DisplayName, deviceToken, token, expiresAt });
         }
     }
 }

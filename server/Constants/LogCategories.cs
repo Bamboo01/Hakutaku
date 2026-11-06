@@ -14,5 +14,6 @@ namespace server.Constants
     public static class LogCategories
     {
         public const string PlayerAuth = "PlayerAuth";
+        public const string GameServer = "GameServer";
     }
 }

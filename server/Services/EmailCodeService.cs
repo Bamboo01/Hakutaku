@@ -5,8 +5,8 @@
 \date   25th October 2026
 \brief  This file defines EmailCodeService, which makes and redeems the
         6-digit codes mailed for verifying an email and resetting a
-        password. Codes expire, allow only a few wrong tries, and can only
-        be re-sent once a minute.
+        password. Codes expire, allow only a few wrong tries, can only be
+        re-sent once a minute, and are capped per account each day.
 
         Used by LinkEmail.cs, ResendEmail.cs, VerifyEmail.cs,
         ForgotPassword.cs and ResetPassword.cs. Stores PlayerEmailCode rows
@@ -15,6 +15,7 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using server.Auth;
+using server.Constants;
 using server.Hosting;
 using server.Models;
 using server.SEmail;
@@ -41,9 +42,9 @@ namespace server.Services
         internal static bool LooksLikeCode(string? code) =>
             code is { Length: 6 } && code.All(char.IsAsciiDigit);
 
-        // makes a fresh code and retires any older unused one. returns null (and makes nothing)
-        // if one was already made in the last ResendSeconds
-        public async Task<string?> CreateCode(Guid playerId, EmailCodePurpose purpose)
+        // makes a fresh code and retires any older unused one. makes nothing, and says why, if one was
+        // already made in the last ResendSeconds or the account already had its CodesPerDay today
+        public async Task<(string? Code, CodeRefusal Refusal)> CreateCode(Guid playerId, EmailCodePurpose purpose)
         {
             // check, retire, insert all happen in one transaction, so a failure part way can't leave
             // the old code retired with no new one. the lock makes parallel requests for the same
@@ -55,7 +56,12 @@ namespace server.Services
             var now = time.UtcNow();
             var cooldownStart = now.AddSeconds(-ResendSeconds);
             if (await db.PlayerEmailCodes.AnyAsync(c => c.PlayerId == playerId && c.Purpose == purpose && c.CreatedAt > cooldownStart))
-                return null;
+                return (null, CodeRefusal.TooSoon);
+
+            // old codes are only marked used, never deleted, so they still count toward the day
+            var dayStart = now.AddHours(-24);
+            if (await db.PlayerEmailCodes.CountAsync(c => c.PlayerId == playerId && c.Purpose == purpose && c.CreatedAt > dayStart) >= RateLimits.CodesPerDay)
+                return (null, CodeRefusal.TooManyToday);
 
             await db.PlayerEmailCodes
                 .Where(c => c.PlayerId == playerId && c.Purpose == purpose && c.UsedAt == null)
@@ -71,7 +77,7 @@ namespace server.Services
             });
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
-            return code;
+            return (code, CodeRefusal.None);
         }
 
         // redeems a code and then runs whatever the code is for (set the password, mark the email verified)

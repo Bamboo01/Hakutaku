@@ -33,5 +33,23 @@ namespace server.Constants
         public const int CharacterNameMaxLength = 50;
         public const int EventTypeMaxLength = 100;
         public const int EventDataMaxBytes = 10_000;
+
+        // what the owner calls a server key, e.g. "homelab"
+        public const int ServerKeyNameMaxLength = 100;
+
+        // player data, which a game server reads and writes. a value is text, and the cap is bytes (not
+        // characters) since that's what gets stored. the per-request cap stops one call doing a lot of
+        // writes, and the per-tier cap stops one player collecting keys forever
+        public const int PlayerDataKeyMaxLength = 64;
+        public const int PlayerDataValueMaxBytes = 16 * 1024;
+        public const int PlayerDataMaxKeysPerTier = 100;
+        public const int PlayerDataMaxChangesPerRequest = 10;
+
+        // a session ticket is 43 characters (32 random bytes as base64url). anything much longer can't be
+        // one, so it's refused before it is hashed
+        public const int SessionTicketMaxLength = 512;
+
+        // a server key is the same shape (32 random bytes as base64url, 43 characters), so it gets the same cap
+        public const int ServerKeyMaxLength = 512;
     }
 }

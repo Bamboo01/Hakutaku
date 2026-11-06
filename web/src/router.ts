@@ -3,6 +3,7 @@ import { currentUser, refreshSession } from './api'
 import AdminsPage from './pages/AdminsPage.vue'
 import HomePage from './pages/HomePage.vue'
 import LoginPage from './pages/LoginPage.vue'
+import ServerKeysPage from './pages/ServerKeysPage.vue'
 
 // `nav` puts a route in the hamburger menu, `owner` restricts it to the owner.
 // Adding a future page is one entry below and nothing in App.vue.
@@ -18,6 +19,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/login', name: 'login', component: LoginPage, meta: { public: true } },
   { path: '/', name: 'home', component: HomePage, meta: { nav: 'Home' } },
   { path: '/admins', name: 'admins', component: AdminsPage, meta: { nav: 'Admins', owner: true } },
+  { path: '/server-keys', name: 'server-keys', component: ServerKeysPage, meta: { nav: 'Server keys', owner: true } },
   { path: '/:pathMatch(.*)*', redirect: { name: 'home' } },
 ]
 

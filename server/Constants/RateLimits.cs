@@ -36,9 +36,25 @@ namespace server.Constants
         // link email hashes a password and can send mail, and a session is free to get, so it is limited too
         public const string PlayerLink = "player-link";
 
-        // every policy allows this many requests per client ip in each window
+        // display name changes are limited per player instead of per ip: DisplayNameLimiter counts them
+        // once the token is checked, so players on one shared ip don't use up each other's changes
+        public const int DisplayNameChanges = 5;
+        public static readonly TimeSpan DisplayNameWindow = TimeSpan.FromHours(1);
+
+        // codes mailed to one account (per purpose) in 24 hours, on top of the one-a-minute gap. without
+        // it, forgot password could be used to flood someone's inbox, one mail a minute, all day
+        public const int CodesPerDay = 5;
+
+        // most policies allow this many requests per client ip in each window
         public const int PermitLimit = 5;
         public static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
+
+        // register and device login are what every copy of the game calls on launch, so a room of players
+        // behind one ip (a lab, a playtest, a shared nat) all land on them in the same minute. device tokens
+        // can't be guessed and a guest costs no hashing, so these are about load and table spam only, and can
+        // be much looser than the routes that check a password or send mail
+        public const int RegisterPermitLimit = 30;
+        public const int DeviceLoginPermitLimit = 60;
 
         // what a request with no known ip is counted under, so they all share one allowance
         public const string UnknownClient = "unknown";

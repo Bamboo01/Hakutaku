@@ -16,7 +16,8 @@ web/src/
 ├── pages/
 │   ├── LoginPage.vue
 │   ├── HomePage.vue     Placeholder: "UNDER CONSTRUCTION :P"
-│   └── AdminsPage.vue   Owner-only admin management
+│   ├── AdminsPage.vue   Owner-only admin management
+│   └── ServerKeysPage.vue Owner-only server keys: list, generate (shown once), revoke
 └── components/
     └── AppAlert.vue     Shared message banner
 ```
@@ -254,6 +255,30 @@ if (!confirm(`Deactivate "${a.username}"?\n\nThis cannot be undone, and the user
 
 The Deactivate button is hidden for the owner and for already-disabled admins —
 the server would answer `403` and there is nothing left to do, respectively.
+
+### `ServerKeysPage.vue`
+
+Owner-only. Lists the server keys (name, created, expires, last used, and a status
+of Active, Expired or Revoked), generates one from a name and an optional expiry,
+and revokes one.
+
+A new key is shown **once**. Right after it is made, a panel shows the key in a
+read-only box with a Copy button and the note "You won't see this key again". It
+stays until the owner clicks "I've saved it", and it never comes back: the list
+only ever has names and dates, because the server keeps just a hash.
+
+```ts
+created.value = await api.post<NewKey>('/api/admin/server-keys', {
+  name: name.value.trim(),
+  expiresAt: expires.value ? new Date(expires.value).toISOString() : undefined,
+})
+```
+
+The client-side rules mirror the server's: a name is required, and an expiry has
+to be in the future. Revoking asks first, because it can't be undone and the game
+server using that key stops working at once. If the clipboard can't be used (it
+needs https or localhost), the page says so and the key can still be selected by
+hand.
 
 ## Styling
 

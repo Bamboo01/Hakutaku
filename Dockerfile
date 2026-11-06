@@ -17,5 +17,8 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=api /out .
 COPY --from=web /web/dist ./wwwroot
+# run as the non-root "app" user that the base image already has, instead of root. 8080 is above 1024 so
+# it doesn't need root to listen
+USER $APP_UID
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Hakutaku.Server.dll"]

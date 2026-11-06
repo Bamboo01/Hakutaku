@@ -160,12 +160,40 @@ namespace server.Migrations
                     b.Property<string>("RegisteredHardwareId")
                         .HasColumnType("text");
 
-                    b.Property<int>("Xp")
-                        .HasColumnType("integer");
-
                     b.HasKey("Id");
 
                     b.ToTable("Players");
+                });
+
+            modelBuilder.Entity("server.Models.PlayerDataEntry", b =>
+                {
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("player_id");
+
+                    b.Property<short>("Tier")
+                        .HasColumnType("smallint")
+                        .HasColumnName("tier");
+
+                    b.Property<string>("Key")
+                        .HasColumnType("text")
+                        .HasColumnName("key");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("value");
+
+                    b.HasKey("PlayerId", "Tier", "Key");
+
+                    b.ToTable("player_data", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_player_data_tier", "tier IN (0, 1, 2)");
+                        });
                 });
 
             modelBuilder.Entity("server.Models.PlayerEmailCode", b =>
@@ -306,6 +334,51 @@ namespace server.Migrations
                     b.ToTable("player_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("server.Models.ServerKey", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<byte[]>("KeySha256")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("key_sha256");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KeySha256")
+                        .IsUnique();
+
+                    b.ToTable("server_keys", (string)null);
+                });
+
             modelBuilder.Entity("server.Models.TelemetryEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -359,6 +432,15 @@ namespace server.Migrations
                         .IsRequired();
 
                     b.Navigation("Player");
+                });
+
+            modelBuilder.Entity("server.Models.PlayerDataEntry", b =>
+                {
+                    b.HasOne("server.Models.Player", null)
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("server.Models.PlayerEmailCode", b =>

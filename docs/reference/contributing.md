@@ -33,8 +33,16 @@ cd server && dotnet build      # must say Build succeeded
 cd web && npm run build        # runs vue-tsc first, so type errors fail here
 ```
 
-There are no tests to run — there is no test suite. That makes those two builds
-the only automated check before production, so do not skip them.
+Run the server tests too. They need Postgres
+(`docker compose -f compose.dev.yaml up -d postgres`):
+
+```bash
+dotnet test server.Tests                                    # everything
+dotnet test server.Tests --filter "Category!=Integration"   # unit tests only, no database
+```
+
+Jenkins doesn't run them, so those builds and the tests you run by hand are the
+only checks before production, so do not skip them.
 
 If you touched anything Docker-shaped:
 

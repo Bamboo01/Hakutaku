@@ -22,6 +22,10 @@ pipeline {
                 // and keeps the running one if it's invalid, so this fails the build
                 // rather than the site.
                 sh 'docker compose -p hakutaku --env-file /var/lib/jenkins/hakutaku.env -f compose.yaml exec -T caddy caddy reload --config /etc/caddy/Caddyfile'
+
+                // mkdocs.yml is a single-file mount, which pins the inode git just replaced, so the
+                // docs container only sees a changed mkdocs.yml once it's recreated. it starts in seconds
+                sh 'docker compose -p hakutaku --env-file /var/lib/jenkins/hakutaku.env -f compose.yaml up -d --no-deps --force-recreate docs'
             }
         }
 

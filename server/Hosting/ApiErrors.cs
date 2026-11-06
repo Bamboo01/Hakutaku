@@ -5,12 +5,14 @@
 \date   25th October 2026
 \brief  This file defines the answers for the two cases no route handles, in
         the same error shape as every other error: a JSON 500 for any
-        unexpected exception (details go to the log, never to the client)
+        unexpected exception (details go to the log, never to the client,
+        along with which server key made the call, if one did)
         and a JSON 404 for unknown paths under /api.
 
         Wired up in Program.cs: the exception handler goes first and the 404
         catch-all goes last. Messages come from ErrorMessages.cs.
 **************************************************************************/
+using server.Auth;
 using server.Constants;
 
 namespace server.Hosting
@@ -25,6 +27,13 @@ namespace server.Hosting
         {
             app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
             {
+                // the framework has just logged the exception but can't say which game server made the call.
+                // the key filter left its id on the request, so name it right under the exception
+                if (context.Items[ServerKeyGuards.ItemKey] is long keyId)
+                    context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(LogCategories.GameServer)
+                        .LogError("Server key {ServerKeyId} made the request that failed: {Method} {Path}",
+                            keyId, context.Request.Method, context.Request.Path);
+
                 context.Response.StatusCode = StatusCodes.Status500InternalServerError;
                 await context.Response.WriteAsJsonAsync(new { error = ErrorMessages.ServerError });
             }));

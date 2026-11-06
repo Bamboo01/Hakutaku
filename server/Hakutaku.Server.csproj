@@ -17,4 +17,9 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- lets the tests call the internal helpers (PlayerInputRules, EmailCodeService) directly -->
+    <InternalsVisibleTo Include="server.Tests" />
+  </ItemGroup>
+
 </Project>

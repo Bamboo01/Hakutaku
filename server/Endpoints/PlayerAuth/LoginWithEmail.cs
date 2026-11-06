@@ -32,7 +32,7 @@ namespace server.Endpoints.PlayerAuth
 
             var identity = await db.PlayerIdentities
                 .Include(i => i.Player)
-                .FirstOrDefaultAsync(i => i.Provider == PlayerProvider.Email && i.Subject == email);
+                .FirstOrDefaultAsync(i => i.Provider == PlayerProvider.Email && i.Subject == PlayerInputRules.EmailKey(email));
 
             // unknown email still checks a dummy hash, so a miss takes as long as a wrong password and
             // never says which emails exist (same rule as admin login)
@@ -47,7 +47,7 @@ namespace server.Endpoints.PlayerAuth
                 return Results.Json(new { error = "this email isn't verified yet; enter the code mailed to it first" }, statusCode: StatusCodes.Status403Forbidden);
 
             var (token, expiresAt) = await sessions.IssueSession(identity.PlayerId);
-            return Results.Ok(new { id = identity.PlayerId, displayName = identity.Player.DisplayName, xp = identity.Player.Xp, token, expiresAt });
+            return Results.Ok(new { id = identity.PlayerId, displayName = identity.Player.DisplayName, token, expiresAt });
         }
     }
 }

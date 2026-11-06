@@ -25,6 +25,8 @@ namespace server.Services
         static readonly TimeSpan Cooldown = TimeSpan.FromHours(1);
 
         // sent in the background so the caller's response time doesn't depend on the mail server
+        // takes the address's key (see PlayerInputRules.EmailKey), which for gmail is the plain address,
+        // and a mail to that reaches the same inbox as any alias of it
         public void NotifyOwner(string email)
         {
             var key = $"link-attempt:{email}";

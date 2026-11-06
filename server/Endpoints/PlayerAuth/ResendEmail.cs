@@ -5,7 +5,7 @@
 \date   25th October 2026
 \brief  This file defines the POST /api/players/email/resend route. It needs
         the player token and mails a new verification code, at most once a
-        minute per player.
+        minute per player and a few times a day.
 
         Mapped in PlayerAuthRoutes.cs with the player-mail rate limit. Uses
         EmailCodeService and IEmailSender.
@@ -35,10 +35,16 @@ namespace server.Endpoints.PlayerAuth
             if (identity.VerifiedAt is not null)
                 return Results.Json(new { error = "email is already verified" }, statusCode: StatusCodes.Status409Conflict);
 
-            // null means a code was already made in the last minute
-            var code = await codes.CreateCode(player.Id, EmailCodePurpose.Verify);
+            // no code means one was made in the last minute, or today's codes are used up. it's their own
+            // account, so it's fine to say which
+            var (code, refusal) = await codes.CreateCode(player.Id, EmailCodePurpose.Verify);
             if (code is null)
-                return Results.Json(new { error = $"wait {EmailCodeService.ResendSeconds} seconds between codes" }, statusCode: StatusCodes.Status429TooManyRequests);
+            {
+                var error = refusal == CodeRefusal.TooManyToday
+                    ? ErrorMessages.TooManyCodesToday
+                    : $"wait {EmailCodeService.ResendSeconds} seconds between codes";
+                return Results.Json(new { error }, statusCode: StatusCodes.Status429TooManyRequests);
+            }
 
             try
             {

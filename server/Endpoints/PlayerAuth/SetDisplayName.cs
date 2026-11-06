@@ -8,7 +8,8 @@
         trimmed and checked against the length rules.
 
         Mapped in PlayerAuthRoutes.cs. Uses PlayerSessionService to find the
-        caller and PlayerInputRules to check the name.
+        caller, DisplayNameLimiter to cap changes per player and
+        PlayerInputRules to check the name.
 **************************************************************************/
 using Microsoft.EntityFrameworkCore;
 using server.Constants;
@@ -22,12 +23,16 @@ namespace server.Endpoints.PlayerAuth
     public static class SetDisplayName
     {
         // post /api/players/display-name: needs the player token. sets or replaces the name.
-        // no rate limit, it needs a session and it's one cheap update
-        public static async Task<IResult> Handle(Db db, PlayerSessionService sessions, HttpContext http, PlayerDisplayNameRequest request)
+        // limited per player, not per ip (see DisplayNameLimiter)
+        public static async Task<IResult> Handle(Db db, PlayerSessionService sessions, DisplayNameLimiter limiter, HttpContext http, PlayerDisplayNameRequest request)
         {
             var player = await sessions.FindBySession(http);
             if (player is null)
                 return Results.Json(new { error = ErrorMessages.NotLoggedIn }, statusCode: StatusCodes.Status401Unauthorized);
+
+            // counted after the token check, so only real players use up an allowance
+            if (!limiter.TryTake(player.Id))
+                return Results.Json(new { error = ErrorMessages.DisplayNameRateLimited }, statusCode: StatusCodes.Status429TooManyRequests);
 
             if (request.DisplayName is null || !PlayerInputRules.TryNormalizeDisplayName(request.DisplayName, out var displayName))
                 return Results.BadRequest(new { error = ErrorMessages.DisplayNameRule });
