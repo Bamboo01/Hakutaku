@@ -73,6 +73,7 @@ nav:
       - Auth and sessions: components/auth.md
       - Web UI: components/web.md
       - SDK: components/sdk.md
+      - Unity SDK and demo: components/unity.md
       - Simulator: components/simulator.md
       - Tests: components/tests.md
       - Telemetry ingestion: components/ingestion.md

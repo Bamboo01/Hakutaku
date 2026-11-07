@@ -5,3 +5,5 @@
 **/wwwroot
 .git
 server.Tests
+# the Unity package and demo; an opened Unity project's Library/ alone can be gigabytes
+unity

@@ -1,0 +1,22 @@
+{
+    "name": "Hakutaku.Unity.Editor",
+    "rootNamespace": "Hakutaku.Unity.Editor",
+    "references": [
+        "Hakutaku.Unity",
+        "Hakutaku.Unity.Server"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "Hakutaku.Sdk.dll",
+        "Hakutaku.Sdk.Server.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

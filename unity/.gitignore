@@ -1,0 +1,5 @@
+# The root .gitignore is a Visual Studio one: it ignores *.meta files and any folder called
+# "packages". Unity needs both committed (a .meta holds each asset's GUID, and Packages/ holds
+# the project's manifest), so they're let back in for everything under unity/.
+!*.meta
+!/HakutakuDemo/Packages/
