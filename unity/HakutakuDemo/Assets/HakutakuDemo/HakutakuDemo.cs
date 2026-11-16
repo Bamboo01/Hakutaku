@@ -48,13 +48,15 @@ public class HakutakuDemo : MonoBehaviour
 
     void Awake()
     {
-        if (Camera.main == null)
+        // a plain dark background, so the text reads better than it does over the default sky
+        var cam = Camera.main;
+        if (cam == null)
         {
-            var cam = new GameObject("Camera").AddComponent<Camera>();
-            cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.09f, 0.10f, 0.12f);
+            cam = new GameObject("Camera").AddComponent<Camera>();
             cam.tag = "MainCamera";
         }
+        cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.backgroundColor = new Color(0.09f, 0.10f, 0.12f);
 #if UNITY_EDITOR || UNITY_SERVER || HAKUTAKU_SERVER
         server = HakutakuServerSettings.CreateApi();
 #endif
@@ -126,7 +128,8 @@ public class HakutakuDemo : MonoBehaviour
             error => ServerFailed(what, error));
     }
 
-    void ReadXp(bool justWritten = false)
+    // then runs only after a successful read, never after a failed one
+    void ReadXp(bool justWritten = false, Action then = null)
     {
         busy = true;
         server.GetUserReadOnlyData(new GetUserDataRequest { PlayerId = playerId, Keys = new List<string> { "Xp" } },
@@ -138,6 +141,7 @@ public class HakutakuDemo : MonoBehaviour
                 xpKnown = true;
                 xpChangedAt = Time.time;
                 Log(justWritten ? "Read it back from Hakutaku: XP is " + xp : "Read XP: " + xp);
+                then?.Invoke();
             },
             error => ServerFailed("Read XP", error));
     }
@@ -145,9 +149,10 @@ public class HakutakuDemo : MonoBehaviour
     // a write sends the new total and never "+100", so repeating it is harmless
     void AddXp()
     {
+        // never write a total that wasn't read first: if the read fails, nothing is written
         if (!xpKnown)
         {
-            Log("Read XP first: writing without a successful read could overwrite the real total");
+            ReadXp(then: AddXp);
             return;
         }
         busy = true;
@@ -180,11 +185,19 @@ public class HakutakuDemo : MonoBehaviour
 
     // ---- Screen ---------------------------------------------------------------------------------
 
+    // the screen is laid out for a 720-pixel-tall window and scaled up to the real one, so it's the
+    // same size on screen at 1080p, 1440p or 4K
+    const float DesignHeight = 720f;
+
     void OnGUI()
     {
         MakeStyles();
-        var width = Mathf.Min(620f, Screen.width - 40f);
-        GUILayout.BeginArea(new Rect((Screen.width - width) / 2f, 24f, width, Screen.height - 48f));
+        var scale = Mathf.Max(1f, Screen.height / DesignHeight);
+        GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(scale, scale, 1f));
+        var screenWidth = Screen.width / scale;
+        var screenHeight = Screen.height / scale;
+        var width = Mathf.Min(660f, screenWidth - 40f);
+        GUILayout.BeginArea(new Rect((screenWidth - width) / 2f, 20f, width, screenHeight - 40f));
 
         GUILayout.Label("Hakutaku demo", titleStyle);
         GUILayout.Label("Server: " + HakutakuSettings.staticSettings.ServerUrl, textStyle);
@@ -240,11 +253,11 @@ public class HakutakuDemo : MonoBehaviour
     void MakeStyles()
     {
         if (titleStyle != null) return;
-        titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 28, fontStyle = FontStyle.Bold };
-        sectionStyle = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold };
-        textStyle = new GUIStyle(GUI.skin.label) { fontSize = 15, wordWrap = true };
-        bigStyle = new GUIStyle(GUI.skin.label) { fontSize = 40, fontStyle = FontStyle.Bold };
-        buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 15, fixedHeight = 40f };
-        logStyle = new GUIStyle(GUI.skin.label) { fontSize = 13, wordWrap = true };
+        titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 32, fontStyle = FontStyle.Bold };
+        sectionStyle = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold };
+        textStyle = new GUIStyle(GUI.skin.label) { fontSize = 16, wordWrap = true };
+        bigStyle = new GUIStyle(GUI.skin.label) { fontSize = 52, fontStyle = FontStyle.Bold };
+        buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 17, fixedHeight = 44f };
+        logStyle = new GUIStyle(GUI.skin.label) { fontSize = 14, wordWrap = true };
     }
 }

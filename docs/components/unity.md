@@ -18,6 +18,12 @@
    then **Check the server and key**. It should say `OK`.
 5. Press **Play**. The demo screen builds itself in any scene.
 
+!!! warning "Use 127.0.0.1, not localhost"
+    Unity's `HttpClient` tries `localhost`'s IPv6 address (`::1`) and doesn't fall back to
+    IPv4, while Docker publishes the stack on `127.0.0.1` only. So `http://localhost:8090`
+    **times out** in Unity even though the same URL works in a browser. The presets in the
+    settings window already use `127.0.0.1`.
+
 | Button | Side | What it shows |
 |---|---|---|
 | Register a new guest | Player (client SDK) | A new player and its device token, saved for next time |

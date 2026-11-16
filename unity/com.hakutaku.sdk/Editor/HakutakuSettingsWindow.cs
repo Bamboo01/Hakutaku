@@ -10,10 +10,12 @@ namespace Hakutaku.Unity.Editor
     // an asset), and checks both against the real server.
     public class HakutakuSettingsWindow : EditorWindow
     {
+        // 127.0.0.1 and not localhost: Unity's HttpClient tries localhost's IPv6 address (::1) and doesn't
+        // fall back to IPv4, while Docker publishes these ports on 127.0.0.1 only, so localhost times out
         static readonly (string Label, string Url)[] Presets =
         {
-            ("Local: dotnet watch", "http://localhost:5008"),
-            ("Local: Docker", "http://localhost:8090"),
+            ("Local: dotnet watch", "http://127.0.0.1:5008"),
+            ("Local: Docker", "http://127.0.0.1:8090"),
             ("Production", "https://51.79.242.169.nip.io"),
         };
 
@@ -42,7 +44,7 @@ namespace Hakutaku.Unity.Editor
             var settings = HakutakuSharedSettings.Load();
             if (settings == null)
             {
-                EditorGUILayout.HelpBox("This project has no settings asset yet, so the SDK uses http://localhost:5008.", MessageType.Info);
+                EditorGUILayout.HelpBox("This project has no settings asset yet, so the SDK uses " + HakutakuSharedSettings.DefaultServerUrl + ".", MessageType.Info);
                 if (GUILayout.Button("Create settings asset")) CreateSettingsAsset();
                 return;
             }

@@ -14,10 +14,11 @@ namespace Hakutaku.Unity
         public const string ResourceName = "HakutakuSharedSettings";
         public const string AssetPath = "Assets/Resources/" + ResourceName + ".asset";
 
-        // the same default as the client SDK's HakutakuApiSettings: the server under dotnet watch
-        public const string DefaultServerUrl = "http://localhost:5008";
+        // the server under dotnet watch. 127.0.0.1 rather than localhost: Unity's HttpClient tries
+        // localhost's IPv6 address and doesn't fall back to IPv4, so a local server can time out
+        public const string DefaultServerUrl = "http://127.0.0.1:5008";
 
-        [Tooltip("The Hakutaku server, e.g. http://localhost:5008 (dotnet watch), http://localhost:8090 (local Docker) or https://51.79.242.169.nip.io (production).")]
+        [Tooltip("The Hakutaku server, e.g. http://127.0.0.1:5008 (dotnet watch), http://127.0.0.1:8090 (local Docker) or https://51.79.242.169.nip.io (production). Use 127.0.0.1, not localhost: Unity can time out on localhost.")]
         public string ServerUrl = DefaultServerUrl;
 
         // null when the project has no settings asset yet

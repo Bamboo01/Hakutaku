@@ -11,5 +11,5 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 63ca8fd2838c44cdba132dd62888e234, type: 3}
   m_Name: HakutakuSharedSettings
-  m_EditorClassIdentifier:
-  ServerUrl: http://localhost:8090
+  m_EditorClassIdentifier: 
+  ServerUrl: http://127.0.0.1:8090
