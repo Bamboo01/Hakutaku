@@ -3,7 +3,33 @@
 // a mistake shows next to the field instead of as a 400 after Save. The server
 // still checks everything; these only keep the page honest.
 
-export type Player = { id: string; displayName: string | null; providers: string[] }
+// A row of GET /api/players. createdAt is read from the id (null if it isn't a UUIDv7),
+// lastLoginAt is the newest session (null if they never signed in).
+export type Player = {
+  id: string
+  displayName: string | null
+  providers: string[]
+  createdAt: string | null
+  lastLoginAt: string | null
+}
+
+// GET /api/players/{id}: a row plus each linked account. No email addresses, by design.
+export type Account = { provider: string; linkedAt: string; verified: boolean }
+export type PlayerDetail = Player & { accounts: Account[] }
+
+export const when = (iso: string | null, fallback = 'Never') => (iso ? new Date(iso).toLocaleString() : fallback)
+
+// "3 hours ago", for the at-a-glance columns; the exact time sits in the title.
+export function ago(iso: string | null, fallback = 'Never'): string {
+  if (!iso) return fallback
+  const s = (Date.now() - new Date(iso).getTime()) / 1000
+  if (s < 60) return 'just now'
+  const steps: [number, string][] = [[60, 'minute'], [3600, 'hour'], [86400, 'day'], [2592000, 'month'], [31536000, 'year']]
+  let unit = steps[0]
+  for (const step of steps) if (s >= step[0]) unit = step
+  const n = Math.floor(s / unit[0])
+  return `${n} ${unit[1]}${n === 1 ? '' : 's'} ago`
+}
 
 export type TierName = 'ClientWritable' | 'ReadOnly' | 'Internal'
 export type Entry = { key: string; value: string; updatedAt: string }

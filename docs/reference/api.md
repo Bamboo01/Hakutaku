@@ -67,9 +67,9 @@ See [Auth and sessions](../components/auth.md) for the mechanics.
 | POST | `/api/players/email/resend` | Player token, rate-limited | Mail a new verification code |
 | POST | `/api/players/password/forgot` | Rate-limited, **public** | Mail a password-reset code |
 | POST | `/api/players/password/reset` | Rate-limited, **public** | Set a new password with the code |
-| GET | `/api/players` | Admin | List all players (id, display name, linked providers) |
+| GET | `/api/players` | Admin | List all players (id, display name, linked providers, created, last login) |
 | POST | `/api/players` | Admin | Create a player |
-| GET | `/api/players/{id}` | Admin | One player, in the same shape as a list row |
+| GET | `/api/players/{id}` | Admin | One player: a list row plus each linked account (provider, when linked, verified) |
 | GET | `/api/players/{id}/data` | Admin | Every tier of a player's data, with when each key was set |
 | POST | `/api/players/{id}/data` | Admin | Set and remove keys in any tier, logged with the admin's username |
 | GET | `/api/characters` | Admin | List all characters |
@@ -677,6 +677,12 @@ curl -b cookies.txt -X POST http://localhost:5008/api/events \
 
 What the admin UI's player page uses. `{id}` must be a GUID, so these routes can
 never catch one of the public sign-in paths (`register`, `login/device`...).
+
+A player in the list and from `GET /api/players/{id}` has `createdAt`, read from
+the id itself (player ids are UUIDv7, which start with their creation time; `null`
+if an id isn't one), and `lastLoginAt`, the newest session (`null` if they never
+signed in). `GET /api/players/{id}` adds `accounts: [{ provider, linkedAt, verified }]`;
+`verified` matters only for an email, and the address itself is never included.
 
 `GET /api/players/{id}/data` always answers with all three tiers, in this order,
 even when one is empty:

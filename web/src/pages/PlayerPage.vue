@@ -1,32 +1,42 @@
-<!-- One player's page: who they are, then their player data in the three tiers,
-     laid out like PlayFab's Player Data tab. Short values are edited right in the
-     table, longer ones or JSON in ValueDialog. Edits, new keys and removals are
-     held on the page, per tier, until Save, which sends that tier's changes as one
-     POST /api/players/{id}/data. The server holds it to the same rules as a game
-     server's write and logs who made it. -->
+<!-- One player's page, laid out like PlayFab's player view: the player's name over
+     two tabs, Overview (who they are, when they joined and last signed in, their
+     linked accounts, a count of their data) and Player Data.
+
+     Player Data is a card with a tier switch (Client writable / Read only /
+     Internal) and a toolbar over a Key / Value / Last updated table with a checkbox
+     on each row. Short values are edited right in the table, longer ones or JSON in
+     ValueDialog. Edits, new keys and removals are held on the page, per tier, until
+     Save, which sends that tier's changes as one POST /api/players/{id}/data. The
+     server holds it to the same rules as a game server's write and logs who made it.
+     The tab is in the URL (?tab=data), so it can be linked to. -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { RouterLink, onBeforeRouteLeave } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import AppAlert from '../components/AppAlert.vue'
+import AppCard from '../components/AppCard.vue'
 import ValueDialog from '../components/ValueDialog.vue'
 import { ApiError, api } from '../api'
 import {
   type Entry,
   LIMITS,
-  type Player,
+  type PlayerDetail,
   TIERS,
   type TierData,
   type TierName,
+  ago,
+  byteLength,
   editsInline,
   formatBytes,
-  byteLength,
   playerName,
   valueProblem,
+  when,
 } from '../playerData'
 
 const props = defineProps<{ id: string }>()
+const route = useRoute()
+const router = useRouter()
 
-const player = ref<Player | null>(null)
+const player = ref<PlayerDetail | null>(null)
 const saved = reactive<Record<TierName, Entry[]>>({ ClientWritable: [], ReadOnly: [], Internal: [] })
 const loading = ref(true)
 const missing = ref(false)
@@ -34,6 +44,14 @@ const error = ref('')
 const notice = ref('')
 const saving = ref(false)
 const copyNote = ref('')
+
+// ---- page tabs, kept in the URL
+
+type PageTab = 'overview' | 'data'
+const tab = computed<PageTab>(() => (route.query.tab === 'data' ? 'data' : 'overview'))
+const showTab = (t: PageTab) => router.replace({ query: { ...route.query, tab: t === 'overview' ? undefined : t } })
+
+// ---- tiers
 
 const active = ref<TierName>('ReadOnly')
 const activeTier = computed(() => TIERS.find((t) => t.name === active.value)!)
@@ -69,6 +87,7 @@ const rows = computed(() => rowsOf(active.value))
 const changes = (tier: TierName) => Object.keys(drafts[tier].set).length + drafts[tier].removed.length
 const totalChanges = computed(() => TIERS.reduce((n, t) => n + changes(t.name), 0))
 const keyCount = (tier: TierName) => rowsOf(tier).filter((r) => r.state !== 'removed').length
+const savedCount = (tier: TierName) => saved[tier].length
 
 // Why Save can't go yet, or null. Same limits the server enforces.
 const blocker = computed(() => {
@@ -79,6 +98,21 @@ const blocker = computed(() => {
   if (keyCount(tier) > LIMITS.keysPerTier) return `A player can have at most ${LIMITS.keysPerTier} keys in a tier.`
   return null
 })
+
+// ---- selecting rows, for Delete selected
+
+const selected = ref<string[]>([])
+watch(active, () => (selected.value = []))
+const selectable = computed(() => rows.value.filter((r) => r.state !== 'removed').map((r) => r.key))
+const allSelected = computed(() => selectable.value.length > 0 && selectable.value.every((k) => selected.value.includes(k)))
+const toggleAll = () => (selected.value = allSelected.value ? [] : [...selectable.value])
+function toggleRow(key: string) {
+  selected.value = selected.value.includes(key) ? selected.value.filter((k) => k !== key) : [...selected.value, key]
+}
+function removeSelected() {
+  for (const r of rows.value) if (selected.value.includes(r.key)) remove(active.value, r)
+  selected.value = []
+}
 
 // ---- editing
 
@@ -94,7 +128,8 @@ function setValue(tier: TierName, key: string, value: string) {
 function remove(tier: TierName, row: Row) {
   const d = drafts[tier]
   delete d.set[row.key]
-  if (row.state !== 'new') d.removed.push(row.key)
+  if (row.state !== 'new' && !d.removed.includes(row.key)) d.removed.push(row.key)
+  selected.value = selected.value.filter((k) => k !== row.key)
   notice.value = ''
 }
 
@@ -134,7 +169,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    player.value = await api.get<Player>(`/api/players/${props.id}`)
+    player.value = await api.get<PlayerDetail>(`/api/players/${props.id}`)
     await loadData()
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) missing.value = true
@@ -142,6 +177,12 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+async function refresh() {
+  if (totalChanges.value && !confirm('Reload from the server? Your unsaved changes will be lost.')) return
+  for (const t of TIERS) discard(t.name)
+  await load()
 }
 
 async function save() {
@@ -160,6 +201,7 @@ async function save() {
     const d = drafts[tier]
     await api.post(`/api/players/${props.id}/data?tier=${tier}`, { data: d.set, keysToRemove: d.removed })
     discard(tier)
+    selected.value = []
     await loadData()
     notice.value = `Saved ${n} change${n === 1 ? '' : 's'}.`
   } catch (e) {
@@ -192,115 +234,185 @@ onMounted(() => {
 })
 onBeforeUnmount(() => window.removeEventListener('beforeunload', warnUnload))
 
-const when = (iso: string) => new Date(iso).toLocaleString()
 const preview = (v: string) => (v.length > 160 ? v.slice(0, 160) + '…' : v)
+function openTier(t: TierName) {
+  active.value = t
+  showTab('data')
+}
 </script>
 
 <template>
   <p class="crumbs"><RouterLink to="/players">Players</RouterLink> <span class="dim">/</span> {{ player ? playerName(player) : '…' }}</p>
 
-  <p v-if="loading" class="dim">Loading…</p>
+  <p v-if="loading && !player" class="dim">Loading…</p>
   <AppAlert v-else-if="missing" kind="info" message="There is no player with this id." />
 
   <template v-else-if="player">
-    <section class="card">
-      <div>
-        <h1 :class="{ dim: !player.displayName }">{{ playerName(player) }}</h1>
-        <p class="id">
-          <code>{{ player.id }}</code>
-          <button class="secondary small" @click="copyId">{{ copyNote || 'Copy id' }}</button>
-        </p>
-      </div>
-      <div class="providers">
-        <span class="dim label">Sign-in</span>
-        <span v-for="pr in player.providers" :key="pr" class="chip">{{ pr }}</span>
-        <span v-if="!player.providers.length" class="dim">none</span>
-      </div>
-    </section>
-
-    <h2>Player data</h2>
+    <div class="title">
+      <h1 :class="{ dim: !player.displayName }">{{ playerName(player) }}</h1>
+      <span class="spacer" />
+      <button class="secondary small" :disabled="loading" @click="refresh">Refresh</button>
+    </div>
 
     <div class="tabs" role="tablist">
-      <button
-        v-for="t in TIERS"
-        :key="t.name"
-        role="tab"
-        :aria-selected="active === t.name"
-        :class="{ on: active === t.name }"
-        @click="active = t.name"
-      >
-        {{ t.label }}
-        <span class="count">{{ keyCount(t.name) }}</span>
-        <span v-if="changes(t.name)" class="dot" :title="`${changes(t.name)} unsaved`" />
+      <button role="tab" :aria-selected="tab === 'overview'" :class="{ on: tab === 'overview' }" @click="showTab('overview')">Overview</button>
+      <button role="tab" :aria-selected="tab === 'data'" :class="{ on: tab === 'data' }" @click="showTab('data')">
+        Player Data
+        <span v-if="totalChanges" class="dot" :title="`${totalChanges} unsaved`" />
       </button>
     </div>
 
-    <p class="blurb dim">{{ activeTier.blurb }} <span class="limit">{{ keyCount(active) }} / {{ LIMITS.keysPerTier }} keys</span></p>
-
     <AppAlert v-if="error" :message="error" />
-    <AppAlert v-if="notice" kind="info" :message="notice" />
 
-    <table class="kv">
-      <thead>
-        <tr>
-          <th class="k">Key</th>
-          <th>Value</th>
-          <th class="t">Last updated</th>
-          <th class="a"></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="r in rows" :key="r.key" :class="r.state">
-          <td class="k">
-            <code>{{ r.key }}</code>
-            <span v-if="r.state === 'new'" class="tag">new</span>
-            <span v-else-if="r.state === 'edited'" class="tag">edited</span>
-            <span v-else-if="r.state === 'removed'" class="tag del">removed</span>
-          </td>
-          <td class="v">
-            <span v-if="r.state === 'removed'" class="mono struck">{{ preview(r.value) }}</span>
-            <input
-              v-else-if="editsInline(r.value)"
-              class="mono"
-              :value="r.value"
-              :aria-label="`Value of ${r.key}`"
-              spellcheck="false"
-              @input="setValue(active, r.key, ($event.target as HTMLInputElement).value)"
-            />
-            <button v-else class="value-preview mono" :title="`${formatBytes(byteLength(r.value))} — click to edit`" @click="openEdit(r)">
-              {{ preview(r.value) }}
-            </button>
-            <small v-if="r.problem" class="err">{{ r.problem }}</small>
-          </td>
-          <td class="t dim">{{ r.updatedAt ? when(r.updatedAt) : '—' }}</td>
-          <td class="a">
-            <template v-if="r.state === 'removed'">
-              <button class="secondary small" @click="undo(active, r.key)">Undo</button>
-            </template>
-            <template v-else>
-              <button class="secondary small" :aria-label="`Open ${r.key} in the editor`" title="Open in the editor" @click="openEdit(r)">⤢</button>
-              <button v-if="r.state === 'edited'" class="secondary small" title="Undo this edit" @click="undo(active, r.key)">↺</button>
-              <button class="danger small" :aria-label="`Remove ${r.key}`" title="Remove" @click="remove(active, r)">✕</button>
-            </template>
-          </td>
-        </tr>
-        <tr v-if="!rows.length">
-          <td colspan="4" class="dim empty">No {{ activeTier.label.toLowerCase() }} data for this player yet.</td>
-        </tr>
-      </tbody>
-    </table>
+    <!-- ---------------- Overview ---------------- -->
+    <div v-if="tab === 'overview'" class="grid">
+      <AppCard title="Player info">
+        <dl>
+          <dt>Display name</dt>
+          <dd :class="{ dim: !player.displayName }">{{ player.displayName ?? 'Not set' }}</dd>
+          <dt>Player ID</dt>
+          <dd class="id">
+            <code>{{ player.id }}</code>
+            <button class="secondary small" @click="copyId">{{ copyNote || 'Copy' }}</button>
+          </dd>
+          <dt>Created</dt>
+          <dd>{{ when(player.createdAt, 'Unknown') }} <span class="dim">({{ ago(player.createdAt, 'unknown') }})</span></dd>
+          <dt>Last login</dt>
+          <dd>{{ when(player.lastLoginAt) }} <span v-if="player.lastLoginAt" class="dim">({{ ago(player.lastLoginAt) }})</span></dd>
+        </dl>
+      </AppCard>
 
-    <button class="secondary add" @click="openAdd">+ Add key</button>
+      <AppCard title="Linked accounts" flush>
+        <table>
+          <thead>
+            <tr><th>Provider</th><th>Linked</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="a in player.accounts" :key="a.provider">
+              <td><span class="chip">{{ a.provider }}</span></td>
+              <td class="dim" :title="when(a.linkedAt)">{{ ago(a.linkedAt) }}</td>
+              <td>
+                <span v-if="a.provider !== 'email'" class="dim">—</span>
+                <span v-else-if="a.verified" class="ok">Verified</span>
+                <span v-else class="warn">Unverified</span>
+              </td>
+            </tr>
+            <tr v-if="!player.accounts.length">
+              <td colspan="3" class="dim">No linked accounts. This player can't sign in.</td>
+            </tr>
+          </tbody>
+        </table>
+      </AppCard>
 
-    <div v-if="changes(active)" class="savebar">
-      <span>
-        <strong>{{ changes(active) }}</strong> unsaved change{{ changes(active) === 1 ? '' : 's' }} in {{ activeTier.label.toLowerCase() }}
-        <span v-if="blocker" class="err"> · {{ blocker }}</span>
-      </span>
-      <span class="spacer" />
-      <button class="secondary" :disabled="saving" @click="discard(active)">Discard</button>
-      <button :disabled="saving || !!blocker" @click="save">{{ saving ? 'Saving…' : 'Save changes' }}</button>
+      <AppCard title="Player data" flush>
+        <table>
+          <thead>
+            <tr><th>Tier</th><th>Keys</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="t in TIERS" :key="t.name" class="link" tabindex="0" @click="openTier(t.name)" @keydown.enter="openTier(t.name)">
+              <td>{{ t.label }}</td>
+              <td>{{ savedCount(t.name) }} <span class="dim">/ {{ LIMITS.keysPerTier }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </AppCard>
     </div>
+
+    <!-- ---------------- Player Data ---------------- -->
+    <AppCard v-else flush>
+      <template #head>
+        <div class="seg" role="tablist" aria-label="Tier">
+          <button
+            v-for="t in TIERS"
+            :key="t.name"
+            role="tab"
+            :aria-selected="active === t.name"
+            :class="{ on: active === t.name }"
+            @click="active = t.name"
+          >
+            {{ t.label }}
+            <span class="count">{{ keyCount(t.name) }}</span>
+            <span v-if="changes(t.name)" class="dot" :title="`${changes(t.name)} unsaved`" />
+          </button>
+        </div>
+        <span class="spacer" />
+        <span class="dim limit">{{ keyCount(active) }} / {{ LIMITS.keysPerTier }} keys</span>
+      </template>
+
+      <p class="blurb dim">{{ activeTier.blurb }}</p>
+
+      <div class="toolbar">
+        <button @click="openAdd">+ Add key</button>
+        <button class="danger" :disabled="!selected.length" @click="removeSelected">
+          Delete{{ selected.length ? ` (${selected.length})` : '' }}
+        </button>
+        <span class="spacer" />
+        <span v-if="changes(active)" class="pending">
+          <strong>{{ changes(active) }}</strong> unsaved change{{ changes(active) === 1 ? '' : 's' }}
+        </span>
+        <button class="secondary" :disabled="saving || !changes(active)" @click="discard(active)">Discard</button>
+        <button :disabled="saving || !changes(active) || !!blocker" @click="save">{{ saving ? 'Saving…' : 'Save' }}</button>
+      </div>
+      <p v-if="changes(active) && blocker" class="blocker err">{{ blocker }}</p>
+      <AppAlert v-if="notice" kind="info" :message="notice" class="notice" />
+
+      <table class="kv">
+        <thead>
+          <tr>
+            <th class="c">
+              <input type="checkbox" :checked="allSelected" :disabled="!selectable.length" aria-label="Select all keys" @change="toggleAll" />
+            </th>
+            <th class="k">Key</th>
+            <th>Value</th>
+            <th class="t">Last updated</th>
+            <th class="a"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in rows" :key="r.key" :class="[r.state, { picked: selected.includes(r.key) }]">
+            <td class="c">
+              <input
+                type="checkbox"
+                :checked="selected.includes(r.key)"
+                :disabled="r.state === 'removed'"
+                :aria-label="`Select ${r.key}`"
+                @change="toggleRow(r.key)"
+              />
+            </td>
+            <td class="k">
+              <code>{{ r.key }}</code>
+              <span v-if="r.state === 'new'" class="tag">new</span>
+              <span v-else-if="r.state === 'edited'" class="tag">edited</span>
+              <span v-else-if="r.state === 'removed'" class="tag del">deleted</span>
+            </td>
+            <td class="v">
+              <span v-if="r.state === 'removed'" class="mono struck">{{ preview(r.value) }}</span>
+              <input
+                v-else-if="editsInline(r.value)"
+                class="mono"
+                :value="r.value"
+                :aria-label="`Value of ${r.key}`"
+                spellcheck="false"
+                @input="setValue(active, r.key, ($event.target as HTMLInputElement).value)"
+              />
+              <button v-else class="value-preview mono" :title="`${formatBytes(byteLength(r.value))} — click to edit`" @click="openEdit(r)">
+                {{ preview(r.value) }}
+              </button>
+              <small v-if="r.problem" class="err">{{ r.problem }}</small>
+            </td>
+            <td class="t dim" :title="r.updatedAt ? when(r.updatedAt) : ''">{{ r.updatedAt ? ago(r.updatedAt) : '—' }}</td>
+            <td class="a">
+              <button v-if="r.state === 'removed' || r.state === 'edited'" class="secondary small" @click="undo(active, r.key)">Undo</button>
+              <button v-if="r.state !== 'removed'" class="secondary small" :aria-label="`Open ${r.key} in the editor`" title="Open in the editor" @click="openEdit(r)">⤢</button>
+            </td>
+          </tr>
+          <tr v-if="!rows.length">
+            <td colspan="5" class="dim empty">No {{ activeTier.label.toLowerCase() }} data for this player yet. Use “+ Add key”.</td>
+          </tr>
+        </tbody>
+      </table>
+    </AppCard>
 
     <ValueDialog :open="dialog" :taken="takenKeys" @apply="applyDialog" @close="dialog = null" />
   </template>
@@ -309,69 +421,89 @@ const preview = (v: string) => (v.length > 160 ? v.slice(0, 160) + '…' : v)
 </template>
 
 <style scoped>
-h1 { margin: 0 0 0.35rem; font-size: 1.3rem; }
-h2 { margin: 1.75rem 0 0.75rem; font-size: 1.05rem; }
+h1 { margin: 0; font-size: 1.5rem; font-weight: 600; }
 .dim { color: var(--text-dim); }
 .mono { font-family: var(--mono); font-size: 0.82rem; }
 .small { padding: 0.2rem 0.55rem; font-size: 0.8rem; }
 .spacer { flex: 1; }
 .err { color: var(--danger); font-size: 0.8rem; }
 
-.crumbs { margin: 0 0 1rem; font-size: 0.9rem; }
+.crumbs { margin: 0 0 0.5rem; font-size: 0.85rem; }
 .crumbs a { color: var(--accent); }
+.title { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
 
-.card {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem 1.1rem;
-  border: 1px solid var(--border);
-  border-top: 4px solid var(--matcha);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-.id { display: flex; align-items: center; gap: 0.5rem; margin: 0; flex-wrap: wrap; }
-.id code { font-size: 0.82rem; color: var(--text-dim); word-break: break-all; }
-.providers { display: flex; align-items: center; gap: 0.35rem; }
-.label { font-size: 0.8rem; margin-right: 0.2rem; }
-.chip {
-  padding: 0.1rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 0.78rem;
-  background: var(--bg);
-}
-
-.tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); overflow-x: auto; }
+/* page tabs, PlayFab-style underline */
+.tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; }
 .tabs button {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.55rem 0.9rem;
+  padding: 0.6rem 1rem;
   border: none;
   border-bottom: 3px solid transparent;
   border-radius: 0;
   background: transparent;
   color: var(--text-dim);
-  white-space: nowrap;
+  font-weight: 500;
 }
 .tabs button.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
-.count { font-size: 0.75rem; padding: 0 0.4rem; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
-.blurb { margin: 0.75rem 0 1rem; font-size: 0.85rem; display: flex; gap: 1rem; flex-wrap: wrap; }
-.limit { margin-left: auto; font-variant-numeric: tabular-nums; }
+/* overview */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.25rem; align-items: start; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.6rem 1.25rem; margin: 0; font-size: 0.9rem; }
+dt { color: var(--text-dim); font-weight: 600; }
+dd { margin: 0; min-width: 0; }
+.id { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.id code { font-size: 0.8rem; word-break: break-all; }
+.chip {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  background: var(--surface);
+}
+.ok { color: var(--accent); font-weight: 600; font-size: 0.85rem; }
+.warn { color: var(--danger); font-size: 0.85rem; }
+.link { cursor: pointer; }
+.link:hover td, .link:focus-visible td { background: var(--surface); }
+
+/* player data card */
+.seg { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+.seg button {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 0.88rem;
+}
+.seg button.on { background: var(--matcha); color: #14170f; border-color: var(--matcha); font-weight: 600; }
+.count { font-size: 0.72rem; padding: 0 0.4rem; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+.limit { font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+
+.blurb { margin: 0; padding: 0.75rem 1rem 0; font-size: 0.85rem; }
+.toolbar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); }
+.pending { font-size: 0.85rem; margin-right: 0.25rem; }
+.blocker { margin: 0; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border); }
+.notice { margin: 0.75rem 1rem 0; }
 
 .kv { table-layout: fixed; }
-.kv th.k, .kv td.k { width: 26%; }
-.kv th.t, .kv td.t { width: 12rem; font-size: 0.8rem; }
-.kv th.a, .kv td.a { width: 7.5rem; text-align: right; white-space: nowrap; }
+.kv th.c, .kv td.c { width: 2.75rem; }
+.kv th.k, .kv td.k { width: 24%; }
+.kv th.t, .kv td.t { width: 9rem; font-size: 0.8rem; }
+.kv th.a, .kv td.a { width: 6.5rem; text-align: right; white-space: nowrap; }
 .kv td { vertical-align: top; }
-.kv td.k code { font-size: 0.85rem; word-break: break-all; }
+.kv td.c input { width: auto; margin-top: 0.45rem; }
+.kv th.c input { width: auto; }
+.kv td.k code { font-size: 0.85rem; word-break: break-all; line-height: 2; }
 .kv td.v input { padding: 0.35rem 0.5rem; }
+.kv td.t { padding-top: 0.95rem; }
 .kv td.a button + button { margin-left: 0.25rem; }
-.kv td.empty { padding: 1.25rem 0.75rem; }
+.kv td.empty { padding: 1.25rem 1rem; }
+tr.picked td { background: var(--surface); }
 
 .tag { margin-left: 0.4rem; font-size: 0.7rem; padding: 0 0.35rem; border-radius: 4px; background: var(--matcha); color: #14170f; }
 .tag.del { background: transparent; color: var(--danger); border: 1px solid var(--border); }
@@ -394,25 +526,8 @@ tr.removed td:not(.a) { opacity: 0.6; }
   overflow: hidden;
 }
 
-.add { margin-top: 0.75rem; }
-
-.savebar {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-top: 1.25rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
-  background: var(--surface);
-  font-size: 0.9rem;
-}
-
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .kv th.t, .kv td.t { display: none; }
-  .kv th.k, .kv td.k { width: 34%; }
+  .kv th.k, .kv td.k { width: 32%; }
 }
 </style>
