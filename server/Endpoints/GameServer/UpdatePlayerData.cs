@@ -28,29 +28,8 @@ namespace server.Endpoints.GameServer
             if (!PlayerDataRules.TryParseTier(tier, out var parsedTier))
                 return Results.BadRequest(new { error = ErrorMessages.PlayerDataTierInvalid });
 
-            var set = new Dictionary<string, string>();
-            foreach (var (key, value) in request.Data ?? [])
-            {
-                if (!PlayerDataRules.IsValidKey(key))
-                    return Results.BadRequest(new { error = ErrorMessages.PlayerDataKeyInvalid });
-                // a null value is refused, removing a key is what keysToRemove is for
-                if (!PlayerDataRules.IsValidValue(value))
-                    return Results.BadRequest(new { error = ErrorMessages.PlayerDataValueInvalid });
-                set[key] = value!;
-            }
-
-            var remove = new List<string>();
-            foreach (var key in request.KeysToRemove ?? [])
-            {
-                if (!PlayerDataRules.IsValidKey(key))
-                    return Results.BadRequest(new { error = ErrorMessages.PlayerDataKeyInvalid });
-                if (set.ContainsKey(key))
-                    return Results.BadRequest(new { error = ErrorMessages.PlayerDataKeyTwice });
-                if (!remove.Contains(key)) remove.Add(key);
-            }
-
-            if (set.Count + remove.Count > Limits.PlayerDataMaxChangesPerRequest)
-                return Results.BadRequest(new { error = ErrorMessages.PlayerDataTooManyChanges });
+            if (!PlayerDataRules.TryReadChanges(request.Data, request.KeysToRemove, out var set, out var remove, out var error))
+                return Results.BadRequest(new { error });
 
             if (!Guid.TryParse(id, out var playerId) || !await data.PlayerExists(playerId))
                 return Results.NotFound(new { error = ErrorMessages.NoSuchPlayer });
