@@ -12,7 +12,8 @@
         player is a 404, and nothing but an admin session gets in.
 
         Runs against the real server through HakutakuFactory. Tests
-        GetPlayer.cs, ListPlayerData.cs and EditPlayerData.cs.
+        GetPlayer.cs, ListPlayers.cs (the new fields), ListPlayerData.cs
+        and EditPlayerData.cs.
 **************************************************************************/
 using System.Net;
 using System.Text.Json;
@@ -68,6 +69,54 @@ namespace server.Tests
             Assert.Equal(guest.Id, reply.Json.GetProperty("id").GetGuid());
             Assert.Equal("Admin View", reply.Json.GetProperty("displayName").GetString());
             Assert.Equal(["device"], reply.Json.GetProperty("providers").EnumerateArray().Select(p => p.GetString()));
+        }
+
+        [Fact]
+        public async Task One_player_has_when_they_were_made_last_signed_in_and_linked()
+        {
+            var before = DateTimeOffset.UtcNow.AddSeconds(-5);
+            var guest = await anon.RegisterGuest();
+
+            var json = (await admin.Get($"/api/players/{guest.Id}")).Json;
+
+            var created = json.GetProperty("createdAt").GetDateTimeOffset();
+            var lastLogin = json.GetProperty("lastLoginAt").GetDateTimeOffset();
+            Assert.InRange(created, before, DateTimeOffset.UtcNow.AddSeconds(5));
+            Assert.InRange(lastLogin, before, DateTimeOffset.UtcNow.AddSeconds(5));
+            var account = Assert.Single(json.GetProperty("accounts").EnumerateArray());
+            Assert.Equal("device", account.GetProperty("provider").GetString());
+            Assert.True(account.GetProperty("verified").GetBoolean());
+            Assert.InRange(account.GetProperty("linkedAt").GetDateTimeOffset(), before, DateTimeOffset.UtcNow.AddSeconds(5));
+        }
+
+        [Fact]
+        public async Task An_unverified_email_shows_as_unverified_without_the_address()
+        {
+            var guest = await anon.RegisterGuest();
+            var email = $"admin-view-{Guid.NewGuid():N}@example.com";
+            Assert.Equal(HttpStatusCode.OK, (await anon.LinkEmail(guest.Token, email)).Status);
+
+            var reply = await admin.Get($"/api/players/{guest.Id}");
+
+            var accounts = reply.Json.GetProperty("accounts").EnumerateArray().ToDictionary(
+                a => a.GetProperty("provider").GetString()!, a => a.GetProperty("verified").GetBoolean());
+            Assert.False(accounts["email"]);
+            Assert.DoesNotContain(email, reply.Body, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task A_player_made_by_an_admin_has_never_signed_in()
+        {
+            var made = await admin.Post("/api/players", new { displayName = "Never Signed" });
+            var id = made.Json.GetProperty("id").GetGuid();
+
+            var one = (await admin.Get($"/api/players/{id}")).Json;
+            var row = (await admin.Get("/api/players")).Json.EnumerateArray().Single(p => p.GetProperty("id").GetGuid() == id);
+
+            Assert.Equal(JsonValueKind.Null, one.GetProperty("lastLoginAt").ValueKind);
+            Assert.Equal(0, one.GetProperty("accounts").GetArrayLength());
+            Assert.Equal(JsonValueKind.Null, row.GetProperty("lastLoginAt").ValueKind);
+            Assert.Equal(JsonValueKind.String, row.GetProperty("createdAt").ValueKind);
         }
 
         [Fact]
