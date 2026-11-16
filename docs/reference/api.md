@@ -67,6 +67,7 @@ See [Auth and sessions](../components/auth.md) for the mechanics.
 | POST | `/api/players/email/resend` | Player token, rate-limited | Mail a new verification code |
 | POST | `/api/players/password/forgot` | Rate-limited, **public** | Mail a password-reset code |
 | POST | `/api/players/password/reset` | Rate-limited, **public** | Set a new password with the code |
+| GET | `/api/admin/stats` | Admin | The Overview page's numbers: unique users, new users and logins, by period and by day |
 | GET | `/api/players` | Admin | List all players (id, display name, linked providers, created, last login) |
 | POST | `/api/players` | Admin | Create a player |
 | GET | `/api/players/{id}` | Admin | One player: a list row plus each linked account (provider, when linked, verified) |
@@ -672,6 +673,32 @@ curl -b cookies.txt -X POST http://localhost:5008/api/events \
   -H "Content-Type: application/json" \
   -d '{"playerId":"<player-id>","eventType":"level_up","data":"{\"level\":2}"}'
 ```
+
+### Overview stats
+
+`GET /api/admin/stats` (any admin) feeds the admin UI's Overview page, PlayFab's
+Title Overview in miniature:
+
+```json
+{
+  "generatedAt": "2026-11-17T16:00:00Z",
+  "totalPlayers": 19,
+  "uniqueUsers": { "last24h": 4, "previous24h": 2, "last30Days": 11, "previous30Days": 0 },
+  "newUsers":    { "last24h": 4, "previous24h": 1, "last30Days": 19, "previous30Days": 0 },
+  "logins":      { "last24h": 6, "previous24h": 2, "last30Days": 31, "previous30Days": 0 },
+  "days": [{ "endsAt": "2026-10-19T16:00:00Z", "uniqueUsers": 0, "newUsers": 0, "logins": 0 }, "… 30 in all, oldest first"]
+}
+```
+
+- A **day** is a rolling 24 hours counted back from `generatedAt`, not a calendar
+  day, so the numbers mean the same in every timezone. `days[29]` is the last 24 hours.
+- A **login** is a player session being issued, so `register` counts as one too.
+- A **unique user** is a player with at least one session in the period. Across a
+  period it is counted on its own (one player on two days is one user), so it is
+  not the sum of the days.
+- A **new user** is a player whose id (a UUIDv7) was made in the period; there is
+  no `created_at` column.
+- Each `previous…` figure is the period just before, for the Change column.
 
 ### Player data, as an admin
 

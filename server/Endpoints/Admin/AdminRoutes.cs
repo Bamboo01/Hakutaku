@@ -11,6 +11,7 @@
         Called from Program.cs. The handlers are the other files in this
         folder.
 **************************************************************************/
+using server.Auth;
 using server.Constants;
 
 namespace server.Endpoints.Admin
@@ -35,6 +36,9 @@ namespace server.Endpoints.Admin
             group.MapGet("/server-keys", ListServerKeys.Handle);
             group.MapPost("/server-keys", CreateServerKey.Handle);
             group.MapDelete("/server-keys/{id}", RevokeServerKey.Handle);
+
+            // the overview page's numbers. any admin, not just the owner
+            group.MapGet("/stats", GetStats.Handle).RequireAdmin();
         }
     }
 }

@@ -33,6 +33,30 @@ namespace server.Tests
         }
 
         [Fact]
+        public void The_lowest_id_at_a_time_reads_back_as_that_time()
+        {
+            var when = new DateTimeOffset(2026, 11, 16, 9, 30, 15, 123, TimeSpan.Zero);
+
+            Assert.Equal(when, PlayerIds.CreatedAt(PlayerIds.LowestIdAt(when)));
+        }
+
+        [Fact]
+        public void The_lowest_id_sorts_before_every_id_made_at_or_after_that_time_and_after_earlier_ones()
+        {
+            var when = new DateTimeOffset(2026, 11, 16, 9, 30, 15, 123, TimeSpan.Zero);
+            // byte order is how postgres compares uuids
+            static string Bytes(Guid g) => Convert.ToHexString(g.ToByteArray(bigEndian: true));
+            var lowest = Bytes(PlayerIds.LowestIdAt(when));
+
+            for (var i = 0; i < 100; i++)
+            {
+                Assert.True(string.CompareOrdinal(lowest, Bytes(Guid.CreateVersion7(when))) <= 0);
+                Assert.True(string.CompareOrdinal(lowest, Bytes(Guid.CreateVersion7(when.AddMilliseconds(1)))) < 0);
+                Assert.True(string.CompareOrdinal(lowest, Bytes(Guid.CreateVersion7(when.AddMilliseconds(-1)))) > 0);
+            }
+        }
+
+        [Fact]
         public void Any_other_uuid_version_gives_null()
         {
             Assert.Null(PlayerIds.CreatedAt(Guid.NewGuid()));
