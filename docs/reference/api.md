@@ -69,6 +69,9 @@ See [Auth and sessions](../components/auth.md) for the mechanics.
 | POST | `/api/players/password/reset` | Rate-limited, **public** | Set a new password with the code |
 | GET | `/api/players` | Admin | List all players (id, display name, linked providers) |
 | POST | `/api/players` | Admin | Create a player |
+| GET | `/api/players/{id}` | Admin | One player, in the same shape as a list row |
+| GET | `/api/players/{id}/data` | Admin | Every tier of a player's data, with when each key was set |
+| POST | `/api/players/{id}/data` | Admin | Set and remove keys in any tier, logged with the admin's username |
 | GET | `/api/characters` | Admin | List all characters |
 | POST | `/api/characters` | Admin | Create a character |
 | GET | `/api/events` | Admin | List all telemetry events |
@@ -670,6 +673,39 @@ curl -b cookies.txt -X POST http://localhost:5008/api/events \
   -d '{"playerId":"<player-id>","eventType":"level_up","data":"{\"level\":2}"}'
 ```
 
+### Player data, as an admin
+
+What the admin UI's player page uses. `{id}` must be a GUID, so these routes can
+never catch one of the public sign-in paths (`register`, `login/device`...).
+
+`GET /api/players/{id}/data` always answers with all three tiers, in this order,
+even when one is empty:
+
+```json
+{
+  "tiers": [
+    { "tier": "ClientWritable", "entries": [] },
+    { "tier": "ReadOnly", "entries": [{ "key": "Xp", "value": "1200", "updatedAt": "2026-11-16T09:12:00Z" }] },
+    { "tier": "Internal", "entries": [] }
+  ]
+}
+```
+
+`POST /api/players/{id}/data?tier=ReadOnly` takes the same body and gives the
+same answer as the game server's write: `{ data: { key: value }, keysToRemove: [key] }`
+→ `{ updated: n }`. It is held to exactly the same rules (keys, 16 KB values, 10
+changes a request, 100 keys a tier, a key not in both lists) through
+`PlayerDataRules.TryReadChanges`, and an admin may write any tier, `Internal`
+included. Each successful edit is logged under the `AdminActions` category with
+the admin's username and the keys set and removed, never the values.
+
+| Status | When |
+|---|---|
+| `200` | Read, or the edit was made |
+| `400` | A bad tier, key or value, or a limit, with the same messages as the game server's route; nothing is written |
+| `401` | Not signed in as an admin (a player token or server key doesn't count) |
+| `404` | No such player |
+
 ---
 
 ## Error shapes
@@ -698,15 +734,13 @@ Asked for often enough to be worth listing:
 
 | Wanted | Status |
 |---|---|
-| `GET /api/players/{id}` | **No** — list endpoints only |
+| `GET /api/players/{id}` for characters or events | **No** — only players have a single-item route |
 | Filtering a player's characters or events | **No** |
 | Paging | **No** — every list returns the whole table |
 | `PUT` / `PATCH` / `DELETE` on game data | **No** |
 | Player logout / revoking a player session | **No** — tokens last 30 days |
 | Player access to characters and events | **No** — a player token only unlocks the email routes |
 | Unlinking or changing an email, changing a password while signed in | **No** |
-| Server keys for game servers | **No** — blocks [telemetry ingestion](../components/ingestion.md) |
-| Game-server endpoints | **No entity exists** |
-| An audit log | **No table exists** |
+| An audit log | **No table exists** — admin player-data edits are only logged |
 | Admin password change / reset | **No** (players have a reset by email) |
 | Restoring a deactivated admin | **No**, by design |

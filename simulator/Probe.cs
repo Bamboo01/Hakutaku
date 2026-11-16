@@ -54,6 +54,10 @@ namespace simulator
             // No SDK method for these: no game client should ever call them.
             ("raw                    GET /api/players", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/players")).Error),
             ("raw                    POST /api/players", Expect.Denied, async c => (await c.SendRawRequestAsync("POST", "/api/players", """{}""")).Error),
+            // The admin's view of one player and their data: a player can't even read their own this way.
+            ("raw                    GET /api/players/{id}", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", $"/api/players/{c.authenticationContext.PlayerId}")).Error),
+            ("raw                    GET /api/players/{id}/data", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", $"/api/players/{c.authenticationContext.PlayerId}/data")).Error),
+            ("raw                    POST /api/players/{id}/data", Expect.Denied, async c => (await c.SendRawRequestAsync("POST", $"/api/players/{c.authenticationContext.PlayerId}/data?tier=ReadOnly", """{"data":{"Xp":"999999"}}""")).Error),
             ("raw                    GET /api/events", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/events")).Error),
             ("raw                    GET /api/admin/me", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/admin/me")).Error),
             ("raw                    GET /api/admin/admins", Expect.Denied, async c => (await c.SendRawRequestAsync("GET", "/api/admin/admins")).Error),
