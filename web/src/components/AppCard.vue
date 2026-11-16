@@ -38,5 +38,5 @@ h2 { margin: 0; font-size: 1rem; font-weight: 600; flex: 1; }
 .body.flush { padding: 0; }
 .body.flush :deep(table) { margin: 0; }
 .body.flush :deep(th:first-child), .body.flush :deep(td:first-child) { padding-left: 1rem; }
-.body.flush :deep(tr:last-child td) { border-bottom: none; }
+.body.flush :deep(tr:last-child > *) { border-bottom: none; }
 </style>

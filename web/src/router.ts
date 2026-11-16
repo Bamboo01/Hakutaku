@@ -1,8 +1,8 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { currentUser, refreshSession } from './api'
 import AdminsPage from './pages/AdminsPage.vue'
-import HomePage from './pages/HomePage.vue'
 import LoginPage from './pages/LoginPage.vue'
+import OverviewPage from './pages/OverviewPage.vue'
 import PlayerPage from './pages/PlayerPage.vue'
 import PlayersPage from './pages/PlayersPage.vue'
 import ServerKeysPage from './pages/ServerKeysPage.vue'
@@ -21,7 +21,7 @@ declare module 'vue-router' {
 
 const routes: RouteRecordRaw[] = [
   { path: '/login', name: 'login', component: LoginPage, meta: { public: true } },
-  { path: '/', name: 'home', component: HomePage, meta: { nav: 'Overview' } },
+  { path: '/', name: 'home', component: OverviewPage, meta: { nav: 'Overview' } },
   { path: '/players', name: 'players', component: PlayersPage, meta: { nav: 'Players', group: 'Identity' } },
   // no `nav`: reached from a row of the list. `props` hands the id to the page.
   { path: '/players/:id', name: 'player', component: PlayerPage, props: true },

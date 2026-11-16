@@ -15,7 +15,7 @@ web/src/
 ├── style.css            Theme tokens and element styles
 ├── pages/
 │   ├── LoginPage.vue
-│   ├── HomePage.vue     Placeholder: "UNDER CONSTRUCTION :P"
+│   ├── OverviewPage.vue The landing page: unique users, new users, logins
 │   ├── AdminsPage.vue   Owner-only admin management
 │   ├── ServerKeysPage.vue Owner-only server keys: list, generate (shown once), revoke
 │   ├── PlayersPage.vue  Every player, searchable and sortable
@@ -24,6 +24,7 @@ web/src/
 └── components/
     ├── AppAlert.vue     Shared message banner
     ├── AppCard.vue      A panel with a header bar (title, filters, buttons)
+    ├── DailyBars.vue    A small one-series bar chart, one bar per day
     └── ValueDialog.vue  The bigger editor for one player data value
 ```
 
@@ -144,7 +145,7 @@ way PlayFab puts Players under Identity; a link without one stands alone.
 ```ts
 const routes: RouteRecordRaw[] = [
   { path: '/login',   name: 'login',   component: LoginPage,   meta: { public: true } },
-  { path: '/',        name: 'home',    component: HomePage,    meta: { nav: 'Overview' } },
+  { path: '/',        name: 'home',    component: OverviewPage, meta: { nav: 'Overview' } },
   { path: '/players', name: 'players', component: PlayersPage, meta: { nav: 'Players', group: 'Identity' } },
   { path: '/admins',  name: 'admins',  component: AdminsPage,  meta: { nav: 'Admins', group: 'Settings', owner: true } },
   { path: '/:pathMatch(.*)*', redirect: { name: 'home' } },
@@ -228,10 +229,22 @@ await refreshSession()
 
 Login is by **username**, not email.
 
-### `HomePage.vue`
+### `OverviewPage.vue`
 
-The landing page after sign-in. Currently a placeholder reading
-`UNDER CONSTRUCTION :P` — graphs and summary data are meant to go here.
+The landing page after sign-in, like PlayFab's Title Overview. It reads
+`GET /api/admin/stats` once (Refresh reads it again) and shows:
+
+- a **Players** card with the total and a link to the list;
+- **Unique users**, **New users** and **Logins** cards. Each card's header bar is
+  also its table header (Amount / Change), the rows are the last 24 hours and
+  the last 30 days, and Change is the percentage against the period before, or
+  `NA` when that was zero, as PlayFab shows it;
+- under each, `components/DailyBars.vue`: one bar per day for the chosen
+  **Time period** (7, 14 or 30 days, remembered per browser), with a tooltip on
+  hover or keyboard focus and a hidden table for screen readers.
+
+A day is a rolling 24 hours counted back from when the numbers were made, not a
+calendar day; see the stats route in the [API reference](../reference/api.md).
 
 ### `AdminsPage.vue`
 
