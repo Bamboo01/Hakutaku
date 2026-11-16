@@ -59,7 +59,14 @@ async function logout() {
   <div class="layout">
     <aside v-if="showShell && open">
       <nav>
-        <RouterLink v-for="l in links" :key="l.path" :to="l.path" @click="open = false">
+        <!-- A page under a menu entry, like /players/<id> under /players, keeps that entry lit. -->
+        <RouterLink
+          v-for="l in links"
+          :key="l.path"
+          :to="l.path"
+          :class="{ 'router-link-active': l.path !== '/' && route.path.startsWith(l.path + '/') }"
+          @click="open = false"
+        >
           {{ l.label }}
         </RouterLink>
       </nav>

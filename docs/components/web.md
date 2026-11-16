@@ -17,9 +17,13 @@ web/src/
 │   ├── LoginPage.vue
 │   ├── HomePage.vue     Placeholder: "UNDER CONSTRUCTION :P"
 │   ├── AdminsPage.vue   Owner-only admin management
-│   └── ServerKeysPage.vue Owner-only server keys: list, generate (shown once), revoke
+│   ├── ServerKeysPage.vue Owner-only server keys: list, generate (shown once), revoke
+│   ├── PlayersPage.vue  Every player, with a search
+│   └── PlayerPage.vue   One player and their player data, editable per tier
+├── playerData.ts        Player data types and the same checks the server makes
 └── components/
-    └── AppAlert.vue     Shared message banner
+    ├── AppAlert.vue     Shared message banner
+    └── ValueDialog.vue  The bigger editor for one player data value
 ```
 
 Four conventions hold this together. They are worth keeping:
@@ -279,6 +283,32 @@ to be in the future. Revoking asks first, because it can't be undone and the gam
 server using that key stops working at once. If the clipboard can't be used (it
 needs https or localhost), the page says so and the key can still be selected by
 hand.
+
+### `PlayersPage.vue`
+
+Any admin. Lists every player (display name, id, linked sign-in providers) from
+`GET /api/players`, with a search box that filters by name or id in the browser,
+since the server returns the whole table. A row opens that player's page.
+
+### `PlayerPage.vue`
+
+`/players/:id`, reached from the list (it has no menu entry). A header card shows
+the player, and below it their **player data**, laid out like PlayFab's Player
+Data tab: one tab per tier (Client writable, Read only, Internal) with a key
+count, and a Key / Value / Last updated table.
+
+- Short single-line values are edited **right in the table**. Long, multi-line or
+  JSON values show a preview, and they open in `components/ValueDialog.vue`, which
+  has a byte counter against the 16 KB limit and Format JSON / Compact buttons.
+  "+ Add key" opens the same dialog with the key editable.
+- Edits, new keys and removals are **held on the page per tier** and marked
+  `edited`, `new` or `removed` (with Undo), until **Save changes**, which asks
+  first and sends that tier's changes as one `POST /api/players/{id}/data?tier=`.
+  Typing a value back to what is saved drops it from the changes.
+- The rules in `playerData.ts` mirror `PlayerDataRules.cs` and `Limits.cs` (key
+  characters and length, 16 KB values, 10 changes a save, 100 keys a tier), so a
+  problem shows before Save. The server still checks everything.
+- Leaving the page or closing the tab with unsaved changes asks first.
 
 ## Styling
 

@@ -3,6 +3,8 @@ import { currentUser, refreshSession } from './api'
 import AdminsPage from './pages/AdminsPage.vue'
 import HomePage from './pages/HomePage.vue'
 import LoginPage from './pages/LoginPage.vue'
+import PlayerPage from './pages/PlayerPage.vue'
+import PlayersPage from './pages/PlayersPage.vue'
 import ServerKeysPage from './pages/ServerKeysPage.vue'
 
 // `nav` puts a route in the hamburger menu, `owner` restricts it to the owner.
@@ -18,6 +20,9 @@ declare module 'vue-router' {
 const routes: RouteRecordRaw[] = [
   { path: '/login', name: 'login', component: LoginPage, meta: { public: true } },
   { path: '/', name: 'home', component: HomePage, meta: { nav: 'Home' } },
+  { path: '/players', name: 'players', component: PlayersPage, meta: { nav: 'Players' } },
+  // no `nav`: reached from a row of the list. `props` hands the id to the page.
+  { path: '/players/:id', name: 'player', component: PlayerPage, props: true },
   { path: '/admins', name: 'admins', component: AdminsPage, meta: { nav: 'Admins', owner: true } },
   { path: '/server-keys', name: 'server-keys', component: ServerKeysPage, meta: { nav: 'Server keys', owner: true } },
   { path: '/:pathMatch(.*)*', redirect: { name: 'home' } },
