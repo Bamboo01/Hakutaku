@@ -300,13 +300,24 @@ created.
 
 ## 7. C++ telemetry ingestion plane (stretch)
 
-Personal addition, not part of the core backend scope. Depends on item 1's
-telemetry event endpoint existing and its contract being stable first.
+**First version done.** `ingest/` (hakutaku-ingest, C++20) takes events from
+game servers at `POST /ingest/events`, checks them, and batches them into the
+app's new `POST /api/server/events/batch`. See `docs/components/ingestion.md`.
 
-- [ ] Decide the contract: does it POST into the ASP.NET ingestion endpoint
-      (keeps one source of truth for schema/validation), or write straight to
-      Postgres (faster, duplicates validation logic)?
-- [ ] Scope it as a separate service/binary — it should not block items 1-6
+- [x] Decide the contract: it POSTs batches to the API, so the event rules stay
+      in one place (`EventRules.cs`) and a schema change never needs C++ changes
+- [x] Scope it as a separate service/binary: its own container, published by
+      Caddy at `/ingest/events` only
+- [ ] **Go live:** make an `ingest` server key, put it in the VM's `.env` and
+      Jenkins' `hakutaku.env` as `INGEST_SERVER_KEY`, and point the game server
+      at `/ingest/events`
+- [ ] `WriteTelemetryEvents` in the server SDK, so the game server doesn't
+      hand-write the call
+- [ ] Events from game clients with a player token (only servers can send today)
+- [ ] An idempotency key per event: delivery is at least once, so a lost answer
+      followed by a retry can store a batch twice
+- [ ] Run the C++ tests as their own Jenkins stage (today only inside the
+      Docker build)
 
 ---
 

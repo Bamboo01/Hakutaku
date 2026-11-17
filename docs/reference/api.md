@@ -58,6 +58,8 @@ See [Auth and sessions](../components/auth.md) for the mechanics.
 | POST | `/api/server/sessions/validate` | **Server key**, **public** | Check a player's session ticket; returns their id and display name |
 | GET | `/api/server/players/{id}/data` | **Server key**, **public** | Read a player's data in one tier |
 | POST | `/api/server/players/{id}/data` | **Server key**, **public** | Set and remove keys in one tier of a player's data |
+| POST | `/api/server/events/batch` | **Server key**, **public** | Store up to 500 telemetry events (the ingestion service calls it) |
+| POST | `/ingest/events` | **Server key**, **public** | Send telemetry events to the ingestion service (not the app; see [Telemetry ingestion](../components/ingestion.md)) |
 | POST | `/api/players/register` | Rate-limited, **public** | Make a guest player; returns its device token (once) and a session |
 | POST | `/api/players/login/device` | Rate-limited, **public** | Sign in with a device token; never creates a player |
 | POST | `/api/players/display-name` | Player token, **public**, limited per player | Set the current player's display name |
@@ -412,6 +414,36 @@ await server.UpdateUserReadOnlyDataAsync(new UpdateUserDataRequest
     Data = new Dictionary<string, string> { ["Xp"] = xp.ToString() },
 });
 ```
+
+### Event batches
+
+`POST /api/server/events/batch` stores telemetry events in bulk. It's what the
+[ingestion service](../components/ingestion.md) calls; a game server sends its
+events to that service, not here.
+
+```json
+{ "events": [
+    { "playerId": "<player id>", "eventType": "level_up", "data": "{\"level\":3}", "occurredAt": "2026-11-17T09:30:15.123Z" }
+] }
+```
+
+→ `200 { "accepted": 1, "rejected": [] }`
+
+- 1 to 500 events. Each is checked by the same rules as `POST /api/events`
+  (`EventRules.cs`): a player id, an event type of 1-100 characters, data that is
+  JSON text of at most 10,000 bytes.
+- The good events are stored together in one transaction. Each bad one, including
+  an event for a player that doesn't exist, comes back in `rejected` as
+  `{ index, error }`, so one broken event never blocks the rest.
+- `occurredAt` is optional: when the ingestion service received the event, so a
+  batch delayed by retries keeps its real times. It must be within the last 24
+  hours (up to 5 minutes ahead is allowed for clock drift). Without it the time is now.
+
+| Status | When |
+|---|---|
+| `200` | The batch was read; see `accepted` and `rejected` |
+| `400` | No `events`, an empty list, or more than 500; nothing is stored |
+| `401` | No server key, or a key that is unknown, revoked or expired |
 
 ---
 

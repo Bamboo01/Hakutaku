@@ -82,6 +82,13 @@ Two things are bought with that hop:
 		reverse_proxy app:8080
 	}
 
+	# The C++ telemetry ingestion service (ingest/). Game servers post events here with
+	# their server key in X-Server-Key, which the service checks with the app. Only this
+	# one route: /ingest/health shows internal counters and stays private.
+	handle /ingest/events {
+		reverse_proxy ingest:9000
+	}
+
 	handle {
 		respond 404
 	}
@@ -98,8 +105,8 @@ Two things are bought with that hop:
 ```
 
 That is the entire public surface of the project: **`/Health`, the nine
-player-auth routes and the game server's `/api/server/*` on the main domain, plus
-the wiki on its own subdomain**. Every `handle` but one matches one exact path,
+player-auth routes, the game server's `/api/server/*` and the ingestion service's
+`/ingest/events` on the main domain, plus the wiki on its own subdomain**. Every `handle` but one matches one exact path,
 so a route that is not listed gets the `404` catch-all even if the app has it.
 
 **`/api/server/*` is the one prefix.** It's safe as a prefix because the app
