@@ -31,6 +31,9 @@ namespace server.Endpoints.GameServer
 
             group.MapGet("/players/{id}/data", GetPlayerData.Handle);
             group.MapPost("/players/{id}/data", UpdatePlayerData.Handle);
+
+            // telemetry in bulk, from the c++ ingestion service (ingest/)
+            group.MapPost("/events/batch", CreateEventBatch.Handle);
         }
     }
 }

@@ -91,5 +91,11 @@ namespace server.Constants
 
         public static readonly string EventDataInvalid =
             $"data must be valid json, up to {Limits.EventDataMaxBytes} bytes";
+
+        public static readonly string EventBatchInvalid =
+            $"events must be a list of 1-{Limits.EventBatchMaxEvents} events";
+
+        public static readonly string EventTimeInvalid =
+            $"occurredAt must be within the last {Limits.EventMaxAge.TotalHours:0} hours";
     }
 }
