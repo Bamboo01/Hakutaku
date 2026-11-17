@@ -50,6 +50,13 @@
 		reverse_proxy app:8080
 	}
 
+	# The C++ telemetry ingestion service (ingest/). Game servers post events here with
+	# their server key in X-Server-Key, which the service checks with the app. Only this
+	# one route: /ingest/health shows internal counters and stays private.
+	handle /ingest/events {
+		reverse_proxy ingest:9000
+	}
+
 	handle {
 		respond 404
 	}

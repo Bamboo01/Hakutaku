@@ -64,6 +64,23 @@ services:
     depends_on:
       - app
       - docs
+      - ingest
+
+  ingest:
+    # The C++ telemetry ingestion service (ingest/). Caddy publishes only its
+    # POST /ingest/events; game servers authenticate there with their own server
+    # key. It sends batches to the app with INGEST_SERVER_KEY, a server key made
+    # for it on the Server keys page and put in the .env (and Jenkins' copy).
+    # Until that is set it exits saying so, and Docker keeps retrying; the rest of
+    # the stack is unaffected.
+    build: ./ingest
+    restart: unless-stopped
+    environment:
+      HAKUTAKU_URL: http://app:8080
+      HAKUTAKU_SERVER_KEY: ${INGEST_SERVER_KEY:-}
+    # No `ports:` -- reached only through caddy.
+    depends_on:
+      - app
 
   docs:
     # The wiki in docs/, live-served rather than built. Reachable only through
