@@ -38,8 +38,10 @@ using nlohmann::json;
 namespace
 {
     constexpr std::size_t kMaxEventsPerRequest = 1000;
-    // 1,000 events of 10 kb would be 10 mb; most requests are far smaller. anything bigger is refused
+    // 1,000 events of 10 kb would be 10 mb; most requests are far smaller. anything bigger is refused.
+    // CMakeLists.txt sets cpp-httplib's separate limit for form-encoded bodies to the same number
     constexpr std::size_t kMaxBodyBytes = 4 * 1024 * 1024;
+    static_assert(kMaxBodyBytes == CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH, "keep both body limits the same");
     constexpr auto kShutdownGrace = std::chrono::seconds(10);
 
     volatile std::sig_atomic_t stopRequested = 0;

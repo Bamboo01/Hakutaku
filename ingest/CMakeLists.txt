@@ -36,6 +36,10 @@ add_library(ingest_core
   src/log.cpp)
 target_include_directories(ingest_core PUBLIC src)
 target_link_libraries(ingest_core PUBLIC httplib::httplib nlohmann_json::nlohmann_json Threads::Threads)
+# cpp-httplib has a second, hidden body limit of 8 kb for form-encoded requests, and curl's -d (or any
+# client that forgets Content-Type) sends that type, so a batch of events got a 413 well under the real
+# limit. this makes both limits the same as kMaxBodyBytes in main.cpp
+target_compile_definitions(ingest_core PUBLIC CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH=4194304)
 if(MSVC)
   target_compile_options(ingest_core PUBLIC /W4 /permissive-)
   # cpp-httplib needs Windows 10's socket api
