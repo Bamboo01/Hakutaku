@@ -9,17 +9,23 @@ player-facing UI.
 ```text
 web/src/
 ├── main.ts              createApp + router + the global 401 handler
-├── App.vue              Shell: hamburger nav, theme toggle, <router-view>
+├── App.vue              Shell: top bar, PlayFab-style sidebar with foldable groups, <router-view>
 ├── router.ts            Routes, the nav menu source, the auth guard
 ├── api.ts               The one fetch wrapper
 ├── style.css            Theme tokens and element styles
 ├── pages/
 │   ├── LoginPage.vue
-│   ├── HomePage.vue     Placeholder: "UNDER CONSTRUCTION :P"
+│   ├── OverviewPage.vue The landing page: unique users, new users, logins
 │   ├── AdminsPage.vue   Owner-only admin management
-│   └── ServerKeysPage.vue Owner-only server keys: list, generate (shown once), revoke
+│   ├── ServerKeysPage.vue Owner-only server keys: list, generate (shown once), revoke
+│   ├── PlayersPage.vue  Every player, searchable and sortable
+│   └── PlayerPage.vue   One player: Overview and Player Data tabs
+├── playerData.ts        Player data types and the same checks the server makes
 └── components/
-    └── AppAlert.vue     Shared message banner
+    ├── AppAlert.vue     Shared message banner
+    ├── AppCard.vue      A panel with a header bar (title, filters, buttons)
+    ├── DailyBars.vue    A small one-series bar chart, one bar per day
+    └── ValueDialog.vue  The bigger editor for one player data value
 ```
 
 Four conventions hold this together. They are worth keeping:
@@ -132,24 +138,24 @@ declare module 'vue-router' {
 }
 ```
 
-So `meta: { nav: 'Admins', owner: true }` is checked rather than stringly-typed.
+So `meta: { nav: 'Admins', group: 'Settings', owner: true }` is checked rather
+than stringly-typed. `group` files a link under a foldable sidebar heading, the
+way PlayFab puts Players under Identity; a link without one stands alone.
 
 ```ts
 const routes: RouteRecordRaw[] = [
-  { path: '/login',  name: 'login',  component: LoginPage,  meta: { public: true } },
-  { path: '/',       name: 'home',   component: HomePage,   meta: { nav: 'Home' } },
-  { path: '/admins', name: 'admins', component: AdminsPage, meta: { nav: 'Admins', owner: true } },
+  { path: '/login',   name: 'login',   component: LoginPage,   meta: { public: true } },
+  { path: '/',        name: 'home',    component: OverviewPage, meta: { nav: 'Overview' } },
+  { path: '/players', name: 'players', component: PlayersPage, meta: { nav: 'Players', group: 'Identity' } },
+  { path: '/admins',  name: 'admins',  component: AdminsPage,  meta: { nav: 'Admins', group: 'Settings', owner: true } },
   { path: '/:pathMatch(.*)*', redirect: { name: 'home' } },
 ]
 ```
 
-### The nav menu comes from the array, not the router
+### The sidebar comes from the array, not the router
 
-```ts
-export const navLinks = routes
-  .filter((r) => r.meta?.nav)
-  .map((r) => ({ path: r.path, label: r.meta!.nav!, ownerOnly: r.meta?.owner === true }))
-```
+`navEntries` walks the array in order: a link with no `group` becomes its own
+entry, and links sharing a group gather under the group's first appearance.
 
 !!! warning "Do not rewrite this as `router.getRoutes()`"
     `getRoutes()` returns routes sorted by **path specificity**, not declaration
@@ -183,17 +189,16 @@ router.beforeEach(async (to) => {
 
 ## `App.vue` — the shell
 
-The hamburger nav, the user label, the theme toggle, logout, and
-`<router-view>`.
-
-```ts
-const showShell = computed(() => route.name !== 'login')
-const links = computed(() =>
-  navLinks.filter((l) => !l.ownerOnly || currentUser.value?.role === 'owner'))
-```
+The top bar (user label, theme toggle, logout), the sidebar, and
+`<router-view>`. The sidebar is laid out like PlayFab's: always open on a screen
+wider than 900px, with foldable groups (which ones are folded is remembered in
+`localStorage` under `hakutaku-folded-groups`). On a narrower screen it hides
+behind a ☰ button and closes after each navigation. Owner-only links are hidden
+from other admins, and a group whose links are all hidden disappears with them.
+A page under a link, such as `/players/<id>` under `/players`, keeps that link lit.
 
 The login page renders bare — no nav for someone who is not signed in. Adding a
-page needs **no change to this file**, because the menu is derived.
+page needs **no change to this file**, because the sidebar is derived.
 
 Theme preference is persisted in `localStorage` under `hakutaku-theme`, and
 absent a stored choice the OS preference wins:
@@ -224,10 +229,22 @@ await refreshSession()
 
 Login is by **username**, not email.
 
-### `HomePage.vue`
+### `OverviewPage.vue`
 
-The landing page after sign-in. Currently a placeholder reading
-`UNDER CONSTRUCTION :P` — graphs and summary data are meant to go here.
+The landing page after sign-in, like PlayFab's Title Overview. It reads
+`GET /api/admin/stats` once (Refresh reads it again) and shows:
+
+- a **Players** card with the total and a link to the list;
+- **Unique users**, **New users** and **Logins** cards. Each card's header bar is
+  also its table header (Amount / Change), the rows are the last 24 hours and
+  the last 30 days, and Change is the percentage against the period before, or
+  `NA` when that was zero, as PlayFab shows it;
+- under each, `components/DailyBars.vue`: one bar per day for the chosen
+  **Time period** (7, 14 or 30 days, remembered per browser), with a tooltip on
+  hover or keyboard focus and a hidden table for screen readers.
+
+A day is a rolling 24 hours counted back from when the numbers were made, not a
+calendar day; see the stats route in the [API reference](../reference/api.md).
 
 ### `AdminsPage.vue`
 
@@ -279,6 +296,42 @@ to be in the future. Revoking asks first, because it can't be undone and the gam
 server using that key stops working at once. If the clipboard can't be used (it
 needs https or localhost), the page says so and the key can still be selected by
 hand.
+
+### `PlayersPage.vue`
+
+Any admin. Identity → Players in the sidebar. Lists every player (display name,
+id, created, last login, sign-in providers) from `GET /api/players` in a card,
+with a search box that filters by name or id in the browser, since the server
+returns the whole table. Newest first; the name, Created and Last login headings
+sort. A row opens that player's page.
+
+### `PlayerPage.vue`
+
+`/players/:id`, reached from the list (it has no menu entry), with two tabs like
+PlayFab's player view. The tab is in the URL (`?tab=data`), so it can be linked.
+
+**Overview**: cards for Player info (display name, id with Copy, created, last
+login), Linked accounts (provider, when linked, and Verified / Unverified for an
+email, never the address) and a count of keys per tier, each opening that tier.
+
+**Player Data**: one card. Its header switches tier (Client writable, Read only,
+Internal, each with a key count) and shows `n / 100 keys`; a toolbar under it has
+**+ Add key**, **Delete** (the ticked rows), **Discard** and **Save**; then a
+Key / Value / Last updated table with a checkbox on each row.
+
+- Short single-line values are edited **right in the table**. Long, multi-line or
+  JSON values show a preview, and they open in `components/ValueDialog.vue`, which
+  has a byte counter against the 16 KB limit and Format JSON / Compact buttons.
+  "+ Add key" opens the same dialog with the key editable.
+- Edits, new keys and deletions are **held on the page per tier** and marked
+  `edited`, `new` or `deleted` (with Undo), until **Save**, which asks first and
+  sends that tier's changes as one `POST /api/players/{id}/data?tier=`. Typing a
+  value back to what is saved drops it from the changes. **Refresh** reloads from
+  the server, asking first if anything is unsaved.
+- The rules in `playerData.ts` mirror `PlayerDataRules.cs` and `Limits.cs` (key
+  characters and length, 16 KB values, 10 changes a save, 100 keys a tier), so a
+  problem shows before Save. The server still checks everything.
+- Leaving the page or closing the tab with unsaved changes asks first.
 
 ## Styling
 

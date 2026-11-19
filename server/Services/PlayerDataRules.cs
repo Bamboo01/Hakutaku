@@ -8,8 +8,8 @@
         how a list of keys in a URL is read. They are plain checks with no
         database, so they are easy to test on their own.
 
-        Used by GetPlayerData.cs and UpdatePlayerData.cs. The numbers come
-        from Limits.cs.
+        Used by the game server's GetPlayerData.cs and UpdatePlayerData.cs
+        and the admin's EditPlayerData.cs. The numbers come from Limits.cs.
 **************************************************************************/
 using System.Text;
 using server.Constants;
@@ -57,6 +57,44 @@ namespace server.Services
                 if (!keys.Contains(key)) keys.Add(key);
             }
             return true;
+        }
+
+        // reads the body of a write: the keys to set and the keys to remove. every key and value is checked,
+        // a key can't be in both lists, and the two together can't be more than the per-request limit. on a
+        // problem, error is the message to answer with. shared by the game server's route and the admin's, so
+        // both hold a write to exactly the same rules
+        internal static bool TryReadChanges(
+            Dictionary<string, string?>? data, List<string>? keysToRemove,
+            out Dictionary<string, string> set, out List<string> remove, out string error)
+        {
+            set = [];
+            remove = [];
+            error = "";
+
+            foreach (var (key, value) in data ?? [])
+            {
+                if (!IsValidKey(key)) return Fail(ErrorMessages.PlayerDataKeyInvalid, out error);
+                // a null value is refused, removing a key is what keysToRemove is for
+                if (!IsValidValue(value)) return Fail(ErrorMessages.PlayerDataValueInvalid, out error);
+                set[key] = value!;
+            }
+
+            foreach (var key in keysToRemove ?? [])
+            {
+                if (!IsValidKey(key)) return Fail(ErrorMessages.PlayerDataKeyInvalid, out error);
+                if (set.ContainsKey(key)) return Fail(ErrorMessages.PlayerDataKeyTwice, out error);
+                if (!remove.Contains(key)) remove.Add(key);
+            }
+
+            if (set.Count + remove.Count > Limits.PlayerDataMaxChangesPerRequest)
+                return Fail(ErrorMessages.PlayerDataTooManyChanges, out error);
+            return true;
+        }
+
+        static bool Fail(string message, out string error)
+        {
+            error = message;
+            return false;
         }
     }
 }

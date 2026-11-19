@@ -88,7 +88,7 @@ are useless once refused, so they're safe to pass on the command line.
 | Forgot password | `200` (always, so it can't be used to look up accounts) |
 | Reset with a made-up code | `400` |
 | `link/email` with no token, and with a made-up token; `display-name` with no token | `401` |
-| Every player: events, characters, `/api/players`, `/api/admin/*` (server keys included), `/api/server/ping`, and `/api/server/players/{id}/data` | **denied**. A player's own id and token don't open their own data: that takes a server key |
+| Every player: events, characters, `/api/players` (the list, one player and `/api/players/{id}/data`), `/api/admin/*` (server keys included), `/api/server/ping`, and `/api/server/players/{id}/data` | **denied**. A player's own id and token don't open their own data: that takes a server key |
 
 With the owner's password, the probe also signs in as `admin` and checks the
 server keys (`ServerKeyChecks.cs`, over plain HTTP because the SDK has no admin

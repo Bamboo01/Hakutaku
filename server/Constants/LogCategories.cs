@@ -15,5 +15,6 @@ namespace server.Constants
     {
         public const string PlayerAuth = "PlayerAuth";
         public const string GameServer = "GameServer";
+        public const string AdminActions = "AdminActions";
     }
 }
