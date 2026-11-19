@@ -1,0 +1,10 @@
+{
+  "name": "com.hakutaku.sdk",
+  "version": "0.1.0",
+  "displayName": "Hakutaku SDK",
+  "description": "Client and game server SDKs for Hakutaku, a self-hosted PlayFab-style backend. Window > Hakutaku > Settings sets the server URL and, for game servers, a server key that never goes into an asset or a client build.",
+  "unity": "2021.3",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  }
+}
