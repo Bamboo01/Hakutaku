@@ -69,6 +69,24 @@ services:
     depends_on:
       - app
       - docs
+      - ingest
+
+  ingest:
+    # The C++ telemetry ingestion service (ingest/). Game servers post events to
+    # it; it batches them into the app's /api/server/events/batch. It needs a
+    # server key of its own: make one on the Server keys page, then
+    #   INGEST_SERVER_KEY=<key> docker compose -f compose.dev.yaml up -d ingest
+    # Without one it exits with a message saying so.
+    build: ./ingest
+    restart: unless-stopped
+    environment:
+      HAKUTAKU_URL: http://app:8080
+      HAKUTAKU_SERVER_KEY: ${INGEST_SERVER_KEY:-}
+    ports:
+      # Also reachable through caddy on :80 at /ingest/events, like production.
+      - "127.0.0.1:9000:9000"
+    depends_on:
+      - app
 
   docs:
     # The wiki in docs/, live-served rather than built. Reachable only through

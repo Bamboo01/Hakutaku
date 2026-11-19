@@ -9,11 +9,9 @@
         are always the server's. The data must be valid JSON within the size
         limit.
 
-        Mapped in TelemetryRoutes.cs. Uses Limits, DbErrors and
-        EventResponse.
+        Mapped in TelemetryRoutes.cs. Uses EventRules (shared with the
+        ingestion service's batch route), DbErrors and EventResponse.
 **************************************************************************/
-using System.Text;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using server.Constants;
 using server.Hosting;
@@ -28,38 +26,17 @@ namespace server.Endpoints.Telemetry
 
     public static class CreateEvent
     {
-        // data is json kept as text. we only check it parses, we don't look inside it
-        static bool IsValidJson(string text)
-        {
-            try
-            {
-                using var _ = JsonDocument.Parse(text);
-                return true;
-            }
-            catch (JsonException)
-            {
-                return false;
-            }
-        }
-
         // post /api/events: records one event for an existing player
         public static async Task<IResult> Handle(Db db, TimeProvider time, CreateEventRequest request)
         {
-            var eventType = request.EventType?.Trim();
-            if (request.PlayerId is null || request.PlayerId == Guid.Empty
-                || string.IsNullOrEmpty(eventType) || eventType.Length > Limits.EventTypeMaxLength || eventType.Any(char.IsControl))
-                return Results.BadRequest(new { error = ErrorMessages.CreateEventInvalid });
-
-            if (string.IsNullOrWhiteSpace(request.Data)
-                || Encoding.UTF8.GetByteCount(request.Data) > Limits.EventDataMaxBytes
-                || !IsValidJson(request.Data))
-                return Results.BadRequest(new { error = ErrorMessages.EventDataInvalid });
+            if (!EventRules.TryRead(request.PlayerId, request.EventType, request.Data, out var eventType, out var error))
+                return Results.BadRequest(new { error });
 
             var telemetryEvent = new TelemetryEvent
             {
-                PlayerId = request.PlayerId.Value,
+                PlayerId = request.PlayerId!.Value,
                 EventType = eventType,
-                Data = request.Data,
+                Data = request.Data!,
                 // the time is always ours, whatever the client sent
                 Timestamp = time.UtcNow(),
             };

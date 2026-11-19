@@ -34,6 +34,14 @@ namespace server.Constants
         public const int EventTypeMaxLength = 100;
         public const int EventDataMaxBytes = 10_000;
 
+        // the ingestion service's batches. 500 events of at most 10 kb is 5 mb at the very worst, well
+        // inside kestrel's 30 mb body limit. occurredAt is when the ingestion service received the event,
+        // which can be a while before it's stored if the api was down, but never more than a day, and only
+        // a little ahead of our clock (two machines' clocks are never exactly equal)
+        public const int EventBatchMaxEvents = 500;
+        public static readonly TimeSpan EventMaxAge = TimeSpan.FromHours(24);
+        public static readonly TimeSpan EventMaxClockSkew = TimeSpan.FromMinutes(5);
+
         // what the owner calls a server key, e.g. "homelab"
         public const int ServerKeyNameMaxLength = 100;
 
