@@ -9,7 +9,8 @@
         twice changes nothing more. It also keeps a player to the key limit
         for a tier, even when two writes arrive at once.
 
-        Used by GetPlayerData.cs and UpdatePlayerData.cs. Works on
+        Used by the game server's routes (Endpoints/GameServer) and the
+        admin's player data routes (Endpoints/Players). Works on
         PlayerDataEntry rows through Db.
 **************************************************************************/
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,14 @@ namespace server.Services
             if (keys is not null) entries = entries.Where(d => keys.Contains(d.Key));
             return await entries.OrderBy(d => d.Key).ToDictionaryAsync(d => d.Key, d => d.Value);
         }
+
+        // every entry the player has, in every tier, with when each was last set. for the admin's player page,
+        // which shows the three tiers side by side. a game server reads one tier at a time with Read
+        public Task<List<PlayerDataEntry>> ReadAll(Guid playerId) =>
+            db.PlayerData.AsNoTracking()
+                .Where(d => d.PlayerId == playerId)
+                .OrderBy(d => d.Tier).ThenBy(d => d.Key)
+                .ToListAsync();
 
         // sets every key in set and removes every key in remove, all or nothing. returns how many keys it set
         // plus how many it actually removed, or null (changing nothing) if the player would end up with more

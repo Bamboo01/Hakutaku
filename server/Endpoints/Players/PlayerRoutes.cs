@@ -4,8 +4,9 @@
 \par    choi.m@digipen.edu
 \date   25th October 2026
 \brief  This file defines MapPlayerRoutes, which maps the admin's view of
-        players (GET and POST /api/players) and puts the admin check on the
-        whole group.
+        players (GET and POST /api/players, one player, and reading and
+        editing their player data) and puts the admin check on the whole
+        group.
 
         Called from Program.cs. The public sign-in routes under the same
         path are in Endpoints/PlayerAuth.
@@ -25,6 +26,12 @@ namespace server.Endpoints.Players
 
             group.MapGet("", ListPlayers.Handle);
             group.MapPost("", CreatePlayer.Handle);
+
+            // one player and their player data, for the admin ui's player page. the id has to be a guid, so
+            // these can never match one of the public sign-in paths (register, login/device...)
+            group.MapGet("/{id:guid}", GetPlayer.Handle);
+            group.MapGet("/{id:guid}/data", ListPlayerData.Handle);
+            group.MapPost("/{id:guid}/data", EditPlayerData.Handle);
         }
     }
 }

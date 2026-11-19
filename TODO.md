@@ -330,6 +330,11 @@ and that every admin-only route turns a player token away. See
 `docs/components/sdk.md` and `docs/components/simulator.md`. The C++ ingestion
 service that `simulator/` was once meant for is item 7.
 
+- [x] Unity package (`unity/com.hakutaku.sdk/`) with both SDKs as DLLs, a
+      settings asset and window, and the server SDK kept out of client builds;
+      plus a demo project (`unity/HakutakuDemo/`). See `docs/components/unity.md`
+- [ ] Open the demo in Unity and press Play. It's only been compiled against
+      Unity's assemblies with `dotnet` so far, because batch mode had no licence
 - [ ] When characters and events open to player tokens (item 2), update the
       SDK's wire mapping in `sdk/ServerContract.cs` and the probe's
       `AccessChecks` expectations in `simulator/Probe.cs`

@@ -1,0 +1,20 @@
+{
+    "name": "Hakutaku.Unity.Server",
+    "rootNamespace": "Hakutaku.Unity",
+    "references": [
+        "Hakutaku.Unity"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "Hakutaku.Sdk.Server.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "UNITY_EDITOR || UNITY_SERVER || HAKUTAKU_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

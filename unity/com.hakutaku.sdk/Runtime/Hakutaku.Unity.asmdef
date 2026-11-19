@@ -1,0 +1,16 @@
+{
+    "name": "Hakutaku.Unity",
+    "rootNamespace": "Hakutaku.Unity",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "Hakutaku.Sdk.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

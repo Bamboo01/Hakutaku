@@ -28,6 +28,7 @@ namespace server.Hosting
             services.AddScoped<PlayerIdentityService>();
             services.AddScoped<EmailCodeService>();
             services.AddScoped<PlayerDataService>();
+            services.AddScoped<StatsService>();
             services.AddScoped<OwnerSeeder>();
 
             // remembers which emails already got a "someone tried to use your email" heads-up, and how

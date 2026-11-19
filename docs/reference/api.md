@@ -69,8 +69,12 @@ See [Auth and sessions](../components/auth.md) for the mechanics.
 | POST | `/api/players/email/resend` | Player token, rate-limited | Mail a new verification code |
 | POST | `/api/players/password/forgot` | Rate-limited, **public** | Mail a password-reset code |
 | POST | `/api/players/password/reset` | Rate-limited, **public** | Set a new password with the code |
-| GET | `/api/players` | Admin | List all players (id, display name, linked providers) |
+| GET | `/api/admin/stats` | Admin | The Overview page's numbers: unique users, new users and logins, by period and by day |
+| GET | `/api/players` | Admin | List all players (id, display name, linked providers, created, last login) |
 | POST | `/api/players` | Admin | Create a player |
+| GET | `/api/players/{id}` | Admin | One player: a list row plus each linked account (provider, when linked, verified) |
+| GET | `/api/players/{id}/data` | Admin | Every tier of a player's data, with when each key was set |
+| POST | `/api/players/{id}/data` | Admin | Set and remove keys in any tier, logged with the admin's username |
 | GET | `/api/characters` | Admin | List all characters |
 | POST | `/api/characters` | Admin | Create a character |
 | GET | `/api/events` | Admin | List all telemetry events |
@@ -702,6 +706,71 @@ curl -b cookies.txt -X POST http://localhost:5008/api/events \
   -d '{"playerId":"<player-id>","eventType":"level_up","data":"{\"level\":2}"}'
 ```
 
+### Overview stats
+
+`GET /api/admin/stats` (any admin) feeds the admin UI's Overview page, PlayFab's
+Title Overview in miniature:
+
+```json
+{
+  "generatedAt": "2026-11-17T16:00:00Z",
+  "totalPlayers": 19,
+  "uniqueUsers": { "last24h": 4, "previous24h": 2, "last30Days": 11, "previous30Days": 0 },
+  "newUsers":    { "last24h": 4, "previous24h": 1, "last30Days": 19, "previous30Days": 0 },
+  "logins":      { "last24h": 6, "previous24h": 2, "last30Days": 31, "previous30Days": 0 },
+  "days": [{ "endsAt": "2026-10-19T16:00:00Z", "uniqueUsers": 0, "newUsers": 0, "logins": 0 }, "… 30 in all, oldest first"]
+}
+```
+
+- A **day** is a rolling 24 hours counted back from `generatedAt`, not a calendar
+  day, so the numbers mean the same in every timezone. `days[29]` is the last 24 hours.
+- A **login** is a player session being issued, so `register` counts as one too.
+- A **unique user** is a player with at least one session in the period. Across a
+  period it is counted on its own (one player on two days is one user), so it is
+  not the sum of the days.
+- A **new user** is a player whose id (a UUIDv7) was made in the period; there is
+  no `created_at` column.
+- Each `previous…` figure is the period just before, for the Change column.
+
+### Player data, as an admin
+
+What the admin UI's player page uses. `{id}` must be a GUID, so these routes can
+never catch one of the public sign-in paths (`register`, `login/device`...).
+
+A player in the list and from `GET /api/players/{id}` has `createdAt`, read from
+the id itself (player ids are UUIDv7, which start with their creation time; `null`
+if an id isn't one), and `lastLoginAt`, the newest session (`null` if they never
+signed in). `GET /api/players/{id}` adds `accounts: [{ provider, linkedAt, verified }]`;
+`verified` matters only for an email, and the address itself is never included.
+
+`GET /api/players/{id}/data` always answers with all three tiers, in this order,
+even when one is empty:
+
+```json
+{
+  "tiers": [
+    { "tier": "ClientWritable", "entries": [] },
+    { "tier": "ReadOnly", "entries": [{ "key": "Xp", "value": "1200", "updatedAt": "2026-11-16T09:12:00Z" }] },
+    { "tier": "Internal", "entries": [] }
+  ]
+}
+```
+
+`POST /api/players/{id}/data?tier=ReadOnly` takes the same body and gives the
+same answer as the game server's write: `{ data: { key: value }, keysToRemove: [key] }`
+→ `{ updated: n }`. It is held to exactly the same rules (keys, 16 KB values, 10
+changes a request, 100 keys a tier, a key not in both lists) through
+`PlayerDataRules.TryReadChanges`, and an admin may write any tier, `Internal`
+included. Each successful edit is logged under the `AdminActions` category with
+the admin's username and the keys set and removed, never the values.
+
+| Status | When |
+|---|---|
+| `200` | Read, or the edit was made |
+| `400` | A bad tier, key or value, or a limit, with the same messages as the game server's route; nothing is written |
+| `401` | Not signed in as an admin (a player token or server key doesn't count) |
+| `404` | No such player |
+
 ---
 
 ## Error shapes
@@ -730,15 +799,13 @@ Asked for often enough to be worth listing:
 
 | Wanted | Status |
 |---|---|
-| `GET /api/players/{id}` | **No** — list endpoints only |
+| `GET /api/players/{id}` for characters or events | **No** — only players have a single-item route |
 | Filtering a player's characters or events | **No** |
 | Paging | **No** — every list returns the whole table |
 | `PUT` / `PATCH` / `DELETE` on game data | **No** |
 | Player logout / revoking a player session | **No** — tokens last 30 days |
 | Player access to characters and events | **No** — a player token only unlocks the email routes |
 | Unlinking or changing an email, changing a password while signed in | **No** |
-| Server keys for game servers | **No** — blocks [telemetry ingestion](../components/ingestion.md) |
-| Game-server endpoints | **No entity exists** |
-| An audit log | **No table exists** |
+| An audit log | **No table exists** — admin player-data edits are only logged |
 | Admin password change / reset | **No** (players have a reset by email) |
 | Restoring a deactivated admin | **No**, by design |

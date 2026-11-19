@@ -1,0 +1,7 @@
+<!-- Keeps the Hakutaku SDKs whole in IL2CPP builds. They read the server's JSON into their own classes
+     through Newtonsoft (by reflection), and code stripping can't see that, so it would remove what looks
+     unused and every call would fail to parse. A game using the SDKs needs this file in its Assets too. -->
+<linker>
+  <assembly fullname="Hakutaku.Sdk" preserve="all" />
+  <assembly fullname="Hakutaku.Sdk.Server" preserve="all" />
+</linker>
