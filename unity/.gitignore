@@ -3,3 +3,4 @@
 # the project's manifest), so they're let back in for everything under unity/.
 !*.meta
 !/HakutakuDemo/Packages/
+!/HakutakuMirrorSample/Packages/

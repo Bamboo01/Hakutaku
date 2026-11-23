@@ -1,11 +1,12 @@
 # Unity SDK and demo
 
-`unity/` holds two things:
+`unity/` holds three things:
 
 | Folder | What it is |
 |---|---|
 | `unity/com.hakutaku.sdk/` | A Unity package with both SDKs, a settings asset and a settings window, laid out like PlayFab's |
 | `unity/HakutakuDemo/` | An empty Unity 6 project with one demo screen that shows Hakutaku working |
+| `unity/HakutakuMirrorSample/` | A tiny real Mirror game (Unity 2022.3) with Hakutaku login and saved XP. See [the Mirror sample](#the-mirror-sample) |
 
 ## Run the demo
 
@@ -77,6 +78,37 @@ It pulls in Unity's Newtonsoft package by itself. Then:
 - Copy `unity/HakutakuDemo/Assets/link.xml` into the game's `Assets`. Without it, IL2CPP
   builds strip the classes the SDKs read JSON into.
 - On the game server: `var server = HakutakuServerSettings.CreateApi();`
+
+## The Mirror sample
+
+`unity/HakutakuMirrorSample/` proves the whole flow on a real Mirror server and clients before it goes into
+a game. It's Unity **2022.3.62f3** with Mirror 96.0.1 (only Core, Components, the editor tools and KCP). Its login,
+authenticator and XP code is ported from Sundered Frames' `feature/hakutaku-integration`.
+
+| File in `Assets/MirrorSample/` | Job |
+|---|---|
+| `SamplePlayerLogin.cs` | Client: device login, with a token per server and `-profile` |
+| `SampleAuthenticator.*.cs` | Checks the ticket and loads XP (2 s limit), rejects a bad ticket, joins offline on any other failure, kicks a duplicate login |
+| `SampleXpSaver.cs` | Writes totals off the tick: one request per player, newest wins, at most every 30 s, always on leave and match end |
+| `SamplePlayerXp.cs` | `SamplePlayerXp.Award(conn, amount)`, what gameplay code calls. The sample has no XP rules, only a test button |
+| `SampleNetworkManager.cs`, `SampleApp.cs` | The Mirror setup and the test screen |
+
+**To try it:** start Hakutaku locally (`docker compose -f compose.dev.yaml up -d --build`) and make a server key.
+Open the project in Unity 2022.3.62f3, save the key in **Window → Hakutaku → Settings**, then choose **Tools →
+Hakutaku Sample → Build test player**. In `Builds/Windows`, run the server and a client in two terminals:
+
+```powershell
+$env:HAKUTAKU_SERVER_KEY = "<key>"; .\HakutakuMirrorSample.exe -sample-server
+.\HakutakuMirrorSample.exe -sample-client -profile alice
+```
+
+!!! warning "This build contains the server SDK"
+    It defines `HAKUTAKU_SERVER` so one executable can be either side. It's for testing: never give it to players.
+
+**Checked** on the local Docker stack with a real server and clients: XP survives a reconnect; logging in twice
+leaves one connection and keeps the in-memory XP; with Hakutaku stopped, joins work and stored XP is unchanged;
+and when Hakutaku goes down mid-match, the final stored XP matches the server's total once it's back.
+Not covered: a real network cut between a game client and the server, or running on a remote server.
 
 ## Changing the SDKs
 
